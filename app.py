@@ -8,10 +8,10 @@ from datetime import datetime, timedelta
 # --- PAGE CONFIGURATION & THEME ---
 st.set_page_config(page_title="Dwelza - Next Gen Indian Real Estate", page_icon="🏢", layout="wide")
 
-# Custom CSS: Premium Branding + Hiding GitHub / Source Code Links + High Contrast Text
+# Custom CSS: Premium Branding + Hiding GitHub / Source Code Links
 st.markdown("""
     <style>
-    /* Hide the default Streamlit core structural link accents */
+    /* Completely hide default Streamlit deployment code references */
     #MainMenu {visibility: hidden;}
     header {visibility: hidden;}
     footer {visibility: hidden;}
@@ -19,21 +19,7 @@ st.markdown("""
     
     /* Branding Styles */
     .main-title { font-size: 46px; font-weight: bold; color: #FF5A5F; text-align: center; margin-bottom: 5px; }
-    .sub-title { font-size: 18px; color: #555555; text-align: center; margin-bottom: 25px; }
-    
-    /* FIXED: Explicitly set text and heading colors to dark colors for maximum readability */
-    .about-box { 
-        background-color: #F0F4F8; 
-        padding: 20px; 
-        border-radius: 12px; 
-        border: 1px solid #DCE6F1; 
-        margin-bottom: 30px; 
-        color: #1E293B !important;
-    }
-    .about-box h4 { color: #0F172A !important; font-weight: bold !important; }
-    .about-box li { color: #334155 !important; margin-bottom: 6px; }
-    .about-box strong { color: #0F172A !important; }
-    
+    .sub-title { font-size: 18px; color: #888888; text-align: center; margin-bottom: 25px; }
     .card { padding: 20px; border-radius: 10px; background-color: #f8f9fa; box-shadow: 2px 2px 10px rgba(0,0,0,0.05); margin-bottom: 20px; color: #333333; }
     .verified-badge { background-color: #28a745; color: white; padding: 3px 8px; border-radius: 5px; font-size: 12px; font-weight: bold; }
     .dwelzestimate-box { background-color: #E8F0FE; padding: 15px; border-radius: 8px; border-left: 5px solid #1A73E8; margin-top: 10px; color: #1E293B; }
@@ -111,7 +97,7 @@ def save_data(df, sheet_name):
         df.to_excel(writer, sheet_name=sheet_name, index=False)
     st.cache_data.clear()
 
-# --- REAL-TIME VALUATION SYSTEM ---
+# --- REAL-TIME INDIAN VALUATION ENGINE ("DWELZESTIMATE") ---
 def calculate_dwelzestimate(size_sqft, locality, near_metro, historical_df):
     if not historical_df.empty and 'locality' in historical_df.columns:
         match = historical_df[historical_df['locality'] == locality]
@@ -120,7 +106,7 @@ def calculate_dwelzestimate(size_sqft, locality, near_metro, historical_df):
         base_rate = 7000
         
     base_value = size_sqft * base_rate
-    multiplier = 1.06
+    multiplier = 1.06 
     if near_metro:
         multiplier += 0.12
     
@@ -139,21 +125,16 @@ def format_indian_currency(num):
 st.markdown("<div class='main-title'>DWELZA</div>", unsafe_allow_html=True)
 st.markdown("<div class='sub-title'>Next-Gen Fraud-Free Indian Real Estate Marketplace</div>", unsafe_allow_html=True)
 
-# --- "ABOUT THE APP" OVERVIEW CONTAINER ---
-st.markdown("""
-<div class='about-box'>
-    <h4>💡 What is Dwelza?</h4>
-    <p><strong>Dwelza</strong> is an advanced web portal built specifically to address the core challenges of the Indian residential real estate market. 
-    Unlike foreign platforms like Zillow, Dwelza is engineered around local market dynamics with three key structural goals:</p>
-    <ul>
-        <li><strong>Fake Listing Suppression:</strong> Integrates mandatory Indian RERA registration checks and community reporting algorithms to instantly eliminate broker bait-and-switch listings.</li>
-        <li><strong>Privacy Protection (Anti-Spam):</strong> Masks owner contact details using active sessions to keep telephone details hidden from continuous scraping bots and spam telemarketers.</li>
-        <li><strong>The Real-Time Dwelzestimate:</strong> An algorithmic valuation engine adjusted for Indian properties using historical area records, local public infrastructure parameters (like Metro proximity), and current index factors to counter manual market price manipulation.</li>
-    </ul>
-</div>
-""", unsafe_allow_html=True)
-
+# --- SIDEBAR: NAVIGATION MENU & CLOSED 'ABOUT' DROPDOWN IN THE CORNER ---
 menu = st.sidebar.selectbox("Navigate Menu", ["🔍 Explore Properties", "🏗️ Owner / Builder Dashboard"])
+
+with st.sidebar.expander("ℹ️ About Dwelza Project", expanded=False):
+    st.markdown("""
+    **Dwelza** is engineered around distinct Indian localization parameters outperforming foreign platforms like Zillow:
+    * **Fake Listing Suppression:** Mandates RERA registration field parses combined with community reporting parameters to instantly flags bad listings.
+    * **Privacy Guard System:** Implements runtime active user sessions that mask sensitive owner mobile phone numbers against bot phone scrapers.
+    * **Dwelzestimate Machine Engine:** Programmatic localization value indexes calculated using locality metrics, infrastructure weights (like Metro proximity), and inflation parameters.
+    """)
 
 df_listings = load_data("Listings")
 df_historical = load_data("HistoricalSales")
@@ -206,4 +187,90 @@ if menu == "🔍 Explore Properties":
                     st.write(f"📍 **Locality:** {row['locality']} | 📐 **Size:** {row['size_sqft']} Sq.Ft.")
                     
                     metro_val = row.get('near_metro', False)
-                    low_est, high_est = calculate_dwelzestimate(row['size_sqft'], row['locality'], metro_val)
+                    # FIXED: Added missing historical dataframe argument to eliminate calculation loop crashes
+                    low_est, high_est = calculate_dwelzestimate(row['size_sqft'], row['locality'], metro_val, df_historical)
+                    
+                    st.markdown(f"""
+                    <div class='dwelzestimate-box'>
+                        <strong>💡 Dwelzestimate Engine Valuation:</strong> {format_indian_currency(low_est)} - {format_indian_currency(high_est)}<br>
+                        <small>Calculated via custom localized parameters based on baseline index evaluations and location parameters.</small>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    
+                with c_right:
+                    st.subheader(format_indian_currency(row['price_inr']))
+                    
+                    mask_key = f"mask_{row['listing_id']}"
+                    if mask_key not in st.session_state:
+                        st.session_state[mask_key] = True
+                        
+                    if st.session_state[mask_key]:
+                        st.write("📞 Contact: `+91 XXXXX-XX" + str(row['owner_phone'])[-3:] + "`")
+                        if st.button("Unlock Contact Details", key=f"btn_{row['listing_id']}"):
+                            st.session_state[mask_key] = False
+                            st.rerun()
+                    else:
+                        st.success(f"📞 Contact {row['owner_name']}: {row['owner_phone']}")
+                    
+                    if st.button("🚨 Report Fake / Stale", key=f"rep_{row['listing_id']}"):
+                        df_listings.at[idx, 'reports_count'] += 1
+                        save_data(df_listings, "Listings")
+                        st.warning("Report recorded.")
+                        st.rerun()
+                st.markdown("</div>", unsafe_allow_html=True)
+    else:
+        st.info("No matching live properties found.")
+
+# --- MODULE 2: OWNER DASHBOARD ---
+elif menu == "🏗️ Owner / Builder Dashboard":
+    st.subheader("List Your Indian Property")
+    
+    with st.form("add_property_form", clear_on_submit=True):
+        title = st.text_input("Property Title")
+        locality = st.selectbox("Select Locality Hub", df_historical['locality'].unique() if not df_historical.empty else ["Indiranagar, Bangalore"])
+        price = st.number_input("Asking Price (INR)", min_value=100000, value=5000000)
+        size = st.number_input("Area Size (Sq.Ft.)", min_value=100, value=1200)
+        rera = st.text_input("RERA Registration Number")
+        
+        col_f1, col_f2, col_f3 = st.columns(3)
+        with col_f1:
+            is_veg = st.checkbox("Pure Veg Only")
+        with col_f2:
+            is_bach = st.checkbox("Bachelors Allowed")
+        with col_f3:
+            is_metro = st.checkbox("Near Metro Station")
+            
+        o_name = st.text_input("Owner Name")
+        o_phone = st.text_input("Mobile Number")
+        
+        submitted = st.form_submit_button("Launch Property")
+        
+        if submitted and title and o_name and len(o_phone) >= 10:
+            loc_map = {"Indiranagar, Bangalore": (12.97189, 77.64115), "Andheri West, Mumbai": (19.11967, 72.84642), "DLF Phase 3, Gurgaon": (28.4908, 77.0894)}
+            coords = loc_map.get(locality, (12.9718, 77.6411))
+            
+            new_id = int(df_listings['listing_id'].max() + 1 if not df_listings.empty else 1001)
+            exp_date_calc = (datetime.now() + timedelta(days=30)).strftime("%Y-%m-%d")
+            
+            new_row = {
+                "listing_id": new_id, 
+                "title": title, 
+                "locality": locality, 
+                "price_inr": price,
+                "size_sqft": size, 
+                "lat": coords[0], 
+                "lon": coords[1], 
+                "rera_number": rera,
+                "is_verified": bool(rera), 
+                "veg_only": is_veg, 
+                "bachelors_allowed": is_bach,
+                "near_metro": is_metro, 
+                "owner_name": o_name, 
+                "owner_phone": o_phone,
+                "reports_count": 0, 
+                "expiry_date": exp_date_calc, 
+                "status": "Active"
+            }
+            
+            save_data(pd.concat([df_listings, pd.DataFrame([new_row])], ignore_index=True), "Listings")
+            st.success("Property uploaded successfully!")
