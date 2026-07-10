@@ -266,4 +266,4 @@ elif menu == "🏗️ Owner / Builder Dashboard":
                 "listing_id": new_id, "title": title, "locality": locality, "price_inr": price,
                 "size_sqft": size, "lat": coords[0], "lon": coords[1], "rera_number": rera,
                 "is_verified": bool(rera), "veg_only": is_veg, "bachelors_allowed": is_bach,
-                "near_metro": is_metro, "owner_name": o_name, "owner_phone": o_phone
+                "near_metro": is_metro, "owner_name": o_name, "owner_phone": o_phone}
