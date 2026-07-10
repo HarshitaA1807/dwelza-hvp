@@ -27,12 +27,15 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# --- DATABASE / EXCEL INITIALIZATION (WITH ERROR FIXING) ---
+# --- DATABASE / EXCEL INITIALIZATION ---
 EXCEL_FILE = "source data.xlsx"
 
 def initialize_database():
     """Ensures the Excel database exists and fixes missing sheets if file already exists."""
-    # Base data definitions
+    # Calculated baseline expiry date string
+    exp_str = (datetime.now() + timedelta(days=30)).strftime("%Y-%m-%d")
+    
+    # FIXED: Every single list below now contains exactly 3 elements to match row count!
     default_listings = {
         "listing_id": [1001, 1002, 1003],
         "title": ["Premium 3 BHK Apartment", "Cozy 1 BHK for Bachelors", "Luxury Smart Villa"],
@@ -49,7 +52,7 @@ def initialize_database():
         "owner_name": ["Rajesh Kumar", "Amit Sharma", "Vikram Malhotra"],
         "owner_phone": ["9876543210", "9123456789", "9988776655"],
         "reports_count": [0, 0, 0],
-        "expiry_date": [(datetime.now() + timedelta(days=30)).strftime("%Y-%m-%d")],
+        "expiry_date": [exp_str, exp_str, exp_str],
         "status": ["Active", "Active", "Active"]
     }
     
@@ -65,16 +68,18 @@ def initialize_database():
             pd.DataFrame(default_historical).to_excel(writer, sheet_name="HistoricalSales", index=False)
             pd.DataFrame(columns=["inquiry_id", "listing_id", "user_name", "user_phone", "timestamp"]).to_excel(writer, sheet_name="Inquiries", index=False)
     else:
-        # File exists (your GitHub version). Check if it's missing sheets and append them safely.
-        excel_reader = pd.ExcelFile(EXCEL_FILE)
-        sheets_present = excel_reader.sheet_names
+        # File exists. Check if it's missing sheets and append them safely.
+        try:
+            excel_reader = pd.ExcelFile(EXCEL_FILE)
+            sheets_present = excel_reader.sheet_names
+        except Exception:
+            sheets_present = []
         
-        with pd.ExcelWriter(EXCEL_FILE, engine='openpyxl', mode='a', if_sheet_exists='new') as writer:
-            if "Listings" not in sheets_present:
+        # If any core structural sheet is missing, overwrite cleanly to clear corruption
+        if "Listings" not in sheets_present or "HistoricalSales" not in sheets_present:
+            with pd.ExcelWriter(EXCEL_FILE, engine='openpyxl') as writer:
                 pd.DataFrame(default_listings).to_excel(writer, sheet_name="Listings", index=False)
-            if "HistoricalSales" not in sheets_present:
                 pd.DataFrame(default_historical).to_excel(writer, sheet_name="HistoricalSales", index=False)
-            if "Inquiries" not in sheets_present:
                 pd.DataFrame(columns=["inquiry_id", "listing_id", "user_name", "user_phone", "timestamp"]).to_excel(writer, sheet_name="Inquiries", index=False)
 
 # Force validation and patching
@@ -84,14 +89,13 @@ initialize_database()
 def load_data(sheet_name):
     try:
         df = pd.read_excel(EXCEL_FILE, sheet_name=sheet_name)
-        # Structural fallback: Make sure required processing columns are present
-        if sheet_name == "Listings" and "near_metro" not in df.columns:
-            df["near_metro"] = True
-        if sheet_name == "Listings" and "reports_count" not in df.columns:
-            df["reports_count"] = 0
+        if sheet_name == "Listings":
+            if "near_metro" not in df.columns:
+                df["near_metro"] = True
+            if "reports_count" not in df.columns:
+                df["reports_count"] = 0
         return df
     except Exception:
-        # Emergency backup data return to prevent crashing
         if sheet_name == "HistoricalSales":
             return pd.DataFrame({"locality": ["Indiranagar, Bangalore"], "avg_price_per_sqft": [9500]})
         return pd.DataFrame()
@@ -262,10 +266,4 @@ elif menu == "🏗️ Owner / Builder Dashboard":
                 "listing_id": new_id, "title": title, "locality": locality, "price_inr": price,
                 "size_sqft": size, "lat": coords[0], "lon": coords[1], "rera_number": rera,
                 "is_verified": bool(rera), "veg_only": is_veg, "bachelors_allowed": is_bach,
-                "near_metro": is_metro, "owner_name": o_name, "owner_phone": o_phone,
-                "reports_count": 0, "expiry_date": (datetime.now() + timedelta(days=30)).strftime("%Y-%m-%d"),
-                "status": "Active"
-            }
-            
-            save_data(pd.concat([df_listings, pd.DataFrame([new_row])], ignore_index=True), "Listings")
-            st.success("Property uploaded successfully!")
+                "near_metro": is_metro, "owner_name": o_name, "owner_phone": o_phone
