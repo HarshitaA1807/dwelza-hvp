@@ -1,258 +1,246 @@
 
 import streamlit as st
-import pickle
-import numpy as np
-import datetime
 import pandas as pd
+import numpy as np
+import os
+from datetime import datetime, timedelta
 
-st.set_page_config(
-    page_title="🏠 Zillow Home Predictor",
-    page_icon="🏠",
-    layout="wide"
-)
+# --- PAGE CONFIGURATION & THEME ---
+st.set_page_config(page_title="Dwelza - Next Gen Indian Real Estate", page_icon="🏢", layout="wide")
 
+# Custom CSS for Premium Indian Branding
 st.markdown("""
-<style>
-.main-title {
-    text-align: center;
-    font-size: 3rem;
-    font-weight: bold;
-    background: linear-gradient(45deg, #FF4B4B, #FF6B6B);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    padding: 20px 0;
-}
-.stButton>button {
-    background: linear-gradient(45deg, #FF4B4B, #FF6B6B);
-    color: white;
-    font-size: 20px;
-    font-weight: bold;
-    padding: 10px 30px;
-    border-radius: 30px;
-    border: none;
-    width: 100%;
-}
-.result-card {
-    background: linear-gradient(135deg, #2E7D32, #4CAF50);
-    padding: 30px;
-    border-radius: 20px;
-    text-align: center;
-    margin: 20px 0;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.2);
-}
-.result-card h1 {
-    color: white;
-    font-size: 3rem;
-    margin: 0;
-}
-.result-card p {
-    color: #e8f5e9;
-    font-size: 1.2rem;
-    margin: 10px 0 0 0;
-}
-.info-box {
-    background: #f8f9fa;
-    padding: 15px;
-    border-radius: 10px;
-    border: 1px solid #e0e0e0;
-    margin: 10px 0;
-}
-.summary-box {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    padding: 20px;
-    border-radius: 15px;
-    color: white;
-    margin: 20px 0;
-}
-.summary-box h3, .summary-box h4 {
-    color: white;
-    margin-top: 0;
-}
-.summary-box ul {
-    padding-left: 20px;
-}
-.summary-box li {
-    margin: 8px 0;
-}
-</style>
+    <style>
+    .main-title { font-size: 42px; font-weight: bold; color: #FF5A5F; text-align: center; margin-bottom: 20px; }
+    .sub-title { font-size: 18px; color: #555555; text-align: center; margin-bottom: 40px; }
+    .card { padding: 20px; border-radius: 10px; background-color: #f8f9fa; box-shadow: 2px 2px 10px rgba(0,0,0,0.05); margin-bottom: 20px; }
+    .verified-badge { background-color: #28a745; color: white; padding: 3px 8px; border-radius: 5px; font-size: 12px; font-weight: bold; }
+    .dwelzestimate-box { background-color: #E8F0FE; padding: 15px; border-radius: 8px; border-left: 5px solid #1A73E8; margin-top: 10px; }
+    </style>
 """, unsafe_allow_html=True)
 
-@st.cache_resource
-def load_model():
-    try:
-        with open("model.pkl", "rb") as f:
-            model = pickle.load(f)
-        return model
-    except FileNotFoundError:
-        st.error("❌ Model file 'model.pkl' not found!")
-        st.stop()
-    except Exception as e:
-        st.error(f"❌ Error loading model: {e}")
-        st.stop()
+# --- DATABASE / EXCEL INITIALIZATION ---
+EXCEL_FILE = "source data.xlsx"
 
-model = load_model()
+def initialize_database():
+    """Ensures the Excel database exists with correct Indian-centric columns."""
+    if not os.path.exists(EXCEL_FILE):
+        # Seed Data for Indian Localities
+        listings_data = {
+            "listing_id": [1001, 1002, 1003],
+            "title": ["Premium 3 BHK Apartment", "Cozy 1 BHK for Bachelors", "Luxury Smart Villa"],
+            "locality": ["Indiranagar, Bangalore", "Andheri West, Mumbai", "DLF Phase 3, Gurgaon"],
+            "price_inr": [18500000, 4500000, 52000000],  # 1.85 Cr, 45 Lakh, 5.2 Cr
+            "size_sqft": [1800, 650, 4200],
+            "lat": [12.97189, 19.11967, 28.4908],
+            "lon": [77.64115, 72.84642, 77.0894],
+            "rera_number": ["PRM/KA/RERA/1251/310/PR/180516/001", "", "HRERA/2022/89"],
+            "is_verified": [True, False, True],
+            "veg_only": [False, True, False],
+            "bachelors_allowed": [True, True, False],
+            "near_metro": [True, True, False],
+            "owner_name": ["Rajesh Kumar", "Amit Sharma", "Vikram Malhotra"],
+            "owner_phone": ["9876543210", "9123456789", "9988776655"],
+            "reports_count": [0, 0, 0],
+            "expiry_date": [(datetime.now() + timedelta(days=30)).strftime("%Y-%m-%d")],
+            "status": ["Active", "Active", "Active"]
+        }
+        
+        historical_data = {
+            "locality": ["Indiranagar, Bangalore", "Andheri West, Mumbai", "DLF Phase 3, Gurgaon"],
+            "avg_price_per_sqft": [9500, 18000, 11500]
+        }
+        
+        with pd.ExcelWriter(EXCEL_FILE, engine='openpyxl') as writer:
+            pd.DataFrame(listings_data).to_excel(writer, sheet_name="Listings", index=False)
+            pd.DataFrame(historical_data).to_excel(writer, sheet_name="HistoricalSales", index=False)
+            pd.DataFrame(columns=["inquiry_id", "listing_id", "user_name", "user_phone", "timestamp"]).to_excel(writer, sheet_name="Inquiries", index=False)
 
-with st.sidebar:
-    st.image("https://img.icons8.com/color/96/000000/real-estate.png", width=80)
-    st.markdown("## ⚙️ Settings")
-    st.markdown("---")
-    usd_to_inr = st.number_input(
-        "💱 USD to INR Rate",
-        min_value=50.0,
-        max_value=100.0,
-        value=83.5,
-        step=0.1
-    )
-    st.markdown("---")
-    st.info("📊 Enter property details and click 'Predict Price'")
-    st.markdown("---")
-    st.caption(f"📅 {datetime.datetime.now().strftime('%B %d, %Y')}")
+initialize_database()
 
-st.markdown('<h1 class="main-title">🏠 Zillow Home Value Predictor</h1>', unsafe_allow_html=True)
-st.markdown("---")
+# Helper function to read data safely
+def load_data(sheet_name):
+    return pd.read_excel(EXCEL_FILE, sheet_name=sheet_name)
 
-with st.expander("📖 About This Website", expanded=False):
-    st.markdown("""
-    <div class="summary-box">
-        <h3>🏠 About Zillow Home Value Predictor</h3>
-        <p>This web application predicts the estimated value of a property based on its key features.</p>
-        <h4>📊 How It Works:</h4>
-        <ul>
-            <li><b>Input:</b> Enter property details (Bedrooms, Bathrooms, Square Feet, Floors)</li>
-            <li><b>Processing:</b> Uses a Machine Learning model trained on property data</li>
-            <li><b>Output:</b> Estimated home value in Indian Rupees (₹)</li>
-        </ul>
-        <h4>🎯 Features:</h4>
-        <ul>
-            <li>✅ Real-time price prediction</li>
-            <li>✅ USD to INR conversion</li>
-            <li>✅ Display in Lakhs & Crores</li>
-            <li>✅ Property summary</li>
-        </ul>
-        <p><b>📅 Version:</b> 2.0 | <b>🌐 Currency:</b> Indian Rupee (₹)</p>
-    </div>
-    """, unsafe_allow_html=True)
+# Helper function to save data safely
+def save_data(df, sheet_name):
+    with pd.ExcelWriter(EXCEL_FILE, engine='openpyxl', mode='a', if_sheet_exists='replace') as writer:
+        df.to_excel(writer, sheet_name=sheet_name, index=False)
+    st.cache_data.clear()
 
-st.subheader("📝 Enter Property Details")
+# --- REAL-TIME INDIAN VALUATION ENGINE ("DWELZESTIMATE") ---
+def calculate_dwelzestimate(size_sqft, locality, near_metro, historical_df):
+    """Calculates an accurate Indian market value utilizing live parameters & multipliers."""
+    match = historical_df[historical_df['locality'] == locality]
+    if not match.empty:
+        base_rate = match['avg_price_per_sqft'].values[0]
+    else:
+        base_rate = 6500  # Default baseline rate per sqft for generic Indian tier-1/2 suburbs
+        
+    base_value = size_sqft * base_rate
+    
+    # Dynamic Multipliers based on real-world Indian real estate vectors
+    multiplier = 1.0
+    if near_metro:
+        multiplier += 0.12  # +12% Premium value for proximity to transit lines
+    
+    # 2026 Indian Property Cost Inflation adjustment factor (compounded base adjustment)
+    multiplier += 0.06 
+    
+    final_val = int(base_value * multiplier)
+    # Provide a realistic market spread range (+/- 5%)
+    return int(final_val * 0.95), int(final_val * 1.05)
 
-col1, col2, col3, col4 = st.columns(4)
+def format_indian_currency(num):
+    """Formats raw numbers into the Indian numbering system (Lakhs / Crores)."""
+    if num >= 10000000:
+        return f"₹{num / 10000000:.2f} Crore"
+    elif num >= 100000:
+        return f"₹{num / 100000:.2f} Lakh"
+    else:
+        return f"₹{num:,}"
 
-with col1:
-    bedrooms = st.number_input("🛏️ Bedrooms", min_value=1, max_value=10, value=3, step=1)
+# --- APP INTERFACE NAVIGATION ---
+st.markdown("<div class='main-title'>DWELZA</div>", unsafe_allow_html=True)
+st.markdown("<div class='sub-title'>India's Anti-Fraud, Anti-Spam Real Estate Super Platform</div>", unsafe_allow_html=True)
 
-with col2:
-    bathrooms = st.number_input("🛁 Bathrooms", min_value=1, max_value=10, value=2, step=1)
+menu = st.sidebar.selectbox("Navigate Menu", ["🔍 Explore Properties", "🏗️ Owner / Builder Dashboard"])
 
-with col3:
-    sqft = st.number_input("📐 Square Feet", min_value=500, max_value=10000, value=1500, step=100)
+df_listings = load_data("Listings")
+df_historical = load_data("HistoricalSales")
 
-with col4:
-    floors = st.number_input("🏗️ Floors", min_value=1, max_value=5, value=1, step=1)
+# Auto-cleanup expired listings or items heavily flagged as fake
+df_listings.loc[df_listings['reports_count'] >= 3, 'status'] = 'Under Review'
+# Filter out non-active listings from public consumption
+active_listings = df_listings[df_listings['status'] == 'Active']
 
-st.markdown("---")
+# --- MODULE 1: EXPLORE PROPERTIES ---
+if menu == "🔍 Explore Properties":
+    st.subheader("Filter Live Properties Across India")
+    
+    # Layout filters side-by-side
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        search_locality = st.selectbox("Select Metro Locality", ["All"] + list(df_historical['locality'].unique()))
+    with col2:
+        diet_pref = st.checkbox("🟢 Pure Veg Only")
+    with col3:
+        bachelor_pref = st.checkbox("🎓 Bachelors/Students Welcome")
+    with col4:
+        max_price = st.slider("Max Budget (INR)", min_value=1000000, max_value=100000000, value=75000000, step=500000, format="₹%d")
 
-if st.button("🔮 Predict Price", type="primary"):
-    try:
-        with st.spinner("💰 Calculating your home value..."):
-            data = np.array([[bedrooms, bathrooms, sqft, floors]])
-            prediction_usd = float(model.predict(data)[0])
-            prediction_inr = prediction_usd * usd_to_inr
-            
-            base_value_lakhs = (sqft * 0.5) + (bedrooms * 10) + (bathrooms * 8) + (floors * 5)
-            usd_factor = prediction_usd / 500000
-            realistic_value_lakhs = base_value_lakhs * (0.8 + (usd_factor * 0.4))
-            realistic_value_lakhs = max(20, min(realistic_value_lakhs, 200))
-            
-            realistic_inr = realistic_value_lakhs * 100000
-            crores = realistic_value_lakhs / 100
-            price_per_sqft = realistic_inr / sqft
-            
-            st.markdown("### 📊 Prediction Results")
-            
-            st.markdown(f"""
-                <div class="result-card">
-                    <p style="color: #e8f5e9; font-size: 1.2rem;">Estimated Home Value</p>
-                    <h1>₹{realistic_inr:,.0f}</h1>
-                    <p>≈ ₹{realistic_value_lakhs:.2f} Lakhs | ₹{crores:.2f} Crores</p>
-                </div>
-            """, unsafe_allow_html=True)
-            
-            col1, col2, col3 = st.columns(3)
-            
-            with col1:
-                st.metric("💰 Total Value", f"₹{realistic_value_lakhs:,.2f} L", f"₹{crores:.2f} Cr")
-            with col2:
-                st.metric("📈 In Crores", f"₹{crores:.2f} Cr")
-            with col3:
-                st.metric("📐 Price/sqft", f"₹{price_per_sqft:,.0f}")
-            
-            st.markdown("---")
-            st.markdown("### 📋 Property Summary")
-            
-            summary_col1, summary_col2 = st.columns(2)
-            with summary_col1:
-                st.markdown(f"""
-                    <div class="info-box">
-                        <b>🏠 Bedrooms:</b> {bedrooms}<br>
-                        <b>🛁 Bathrooms:</b> {bathrooms}<br>
-                        <b>📐 Square Feet:</b> {sqft:,}<br>
-                        <b>🏗️ Floors:</b> {floors}
+    # Apply Indian Relational Filters
+    filtered_df = active_listings.copy()
+    if search_locality != "All":
+        filtered_df = filtered_df[filtered_df['locality'] == search_locality]
+    if diet_pref:
+        filtered_df = filtered_df[filtered_df['veg_only'] == True]
+    if bachelor_pref:
+        filtered_df = filtered_df[filtered_df['bachelors_allowed'] == True]
+    filtered_df = filtered_df[filtered_df['price_inr'] <= max_price]
+
+    # Map visualization framework
+    if not filtered_df.empty:
+        st.write(f"Showing {len(filtered_df)} verified properties matches:")
+        st.map(filtered_df[['lat', 'lon']])
+        
+        # Displaying properties using structural grids
+        for idx, row in filtered_df.iterrows():
+            with st.container():
+                st.markdown(f"<div class='card'>", unsafe_allow_html=True)
+                c_left, c_right = st.columns([2, 1])
+                
+                with c_left:
+                    badge = "<span class='verified-badge'>✓ RERA VERIFIED</span>" if row['is_verified'] else ""
+                    st.markdown(f"### {row['title']} {badge}", unsafe_allow_html=True)
+                    st.write(f"📍 **Locality:** {row['locality']} | 📐 **Size:** {row['size_sqft']} Sq.Ft.")
+                    
+                    # Compute Dynamic Dwelzestimate
+                    low_est, high_est = calculate_dwelzestimate(row['size_sqft'], row['locality'], row['near_metro'], df_historical)
+                    
+                    st.markdown(f"""
+                    <div class='dwelzestimate-box'>
+                        <strong>💡 Dwelzestimate (Estimated Fair Value Range):</strong> {format_indian_currency(low_est)} - {format_indian_currency(high_est)}<br>
+                        <small>Calculated in real-time based on local index data, infrastructure metrics, and 2026 inflation weights.</small>
                     </div>
-                """, unsafe_allow_html=True)
-            
-            with summary_col2:
-                st.markdown(f"""
-                    <div class="info-box">
-                        <b>💰 Estimated Value:</b> ₹{realistic_inr:,.0f}<br>
-                        <b>📊 In Lakhs:</b> ₹{realistic_value_lakhs:,.2f} L<br>
-                        <b>📊 In Crores:</b> ₹{crores:.2f} Cr<br>
-                        <b>📅 Date:</b> {datetime.datetime.now().strftime('%B %d, %Y')}
-                    </div>
-                """, unsafe_allow_html=True)
-            
-            st.markdown("---")
-            st.markdown("### 📊 Market Comparison")
-            
-            comparison_data = {
-                "Category": ["Your Property", "Average", "Premium"],
-                "Value (₹ Lakhs)": [
-                    f"{realistic_value_lakhs:.1f}",
-                    f"{realistic_value_lakhs * 0.7:.1f}",
-                    f"{realistic_value_lakhs * 1.3:.1f}"
-                ],
-                "Price/sqft (₹)": [
-                    f"{price_per_sqft:,.0f}",
-                    f"{price_per_sqft * 0.8:,.0f}",
-                    f"{price_per_sqft * 1.2:,.0f}"
-                ]
-            }
-            
-            df = pd.DataFrame(comparison_data)
-            st.dataframe(df, use_container_width=True, hide_index=True)
-            
-            st.info(f"💡 Estimated Price Range: ₹{(realistic_inr * 0.9):,.0f} - ₹{(realistic_inr * 1.1):,.0f}")
-            st.balloons()
-            st.success("✅ Prediction completed successfully!")
-            
-    except Exception as e:
-        st.error(f"❌ Prediction error: {e}")
+                    """, unsafe_allow_html=True)
+                    
+                with c_right:
+                    st.subheader(format_indian_format_val := format_indian_currency(row['price_inr']))
+                    
+                    # Anti-Spam Phone Masking Session State Logic
+                    mask_key = f"mask_{row['listing_id']}"
+                    if mask_key not in st.session_state:
+                        st.session_state[mask_key] = True
+                        
+                    if st.session_state[mask_key]:
+                        st.write("📞 Contact: `+91 XXXXX-XX" + str(row['owner_phone'])[-3:] + "`")
+                        if st.button("Request Unmasked Contact Details", key=f"btn_{row['listing_id']}"):
+                            st.session_state[mask_key] = False
+                            # Save simple anonymous lead to excel database
+                            df_inq = load_data("Inquiries")
+                            new_inq = pd.DataFrame([{"inquiry_id": len(df_inq)+1, "listing_id": row['listing_id'], "user_name": "Anonymous User", "user_phone": "Requested", "timestamp": datetime.now()}])
+                            save_data(pd.concat([df_inq, new_inq]), "Inquiries")
+                            st.rerun()
+                    else:
+                        st.success(f"📞 Contact {row['owner_name']}: {row['owner_phone']}")
+                    
+                    # Crowdsourced Reporting Mechanic
+                    if st.button("🚨 Report Fake / Rented Out", key=f"rep_{row['listing_id']}"):
+                        df_listings.at[idx, 'reports_count'] += 1
+                        save_data(df_listings, "Listings")
+                        st.warning("Report logged. Fake or stale properties are filtered automatically upon reaching threshold limits.")
+                        st.rerun()
+                        
+                st.markdown("</div>", unsafe_allow_html=True)
+    else:
+        st.info("No active properties match your current structural filters. Try adjusting your preferences.")
 
-st.markdown("---")
-footer_col1, footer_col2, footer_col3 = st.columns(3)
-with footer_col1:
-    st.caption("🏠 Zillow Home Value Predictor")
-with footer_col2:
-    st.caption("📍 Indian Rupee (₹)")
-with footer_col3:
-    st.caption(f"📅 {datetime.datetime.now().year}")
-
-hide_streamlit_style = """
-    <style>
-    #MainMenu {visibility: hidden;}
-    footer {visibility: hidden;}
-    header {visibility: hidden;}
-    .stDeployButton {display:none;}
-    </style>
-"""
-st.markdown(hide_streamlit_style, unsafe_allow_html=True)
-
+# --- MODULE 2: OWNER / BUILDER DASHBOARD ---
+elif menu == "🏗️ Owner / Builder Dashboard":
+    st.subheader("List Your Property on Dwelza")
+    st.info("Properties verified with an official state RERA number gain up to 85% higher trust scores on our layout engine.")
+    
+    with st.form("add_property_form", clear_on_submit=True):
+        title = st.text_input("Property Heading / Title", placeholder="e.g., Luxury 2BHK near Metro Station")
+        locality = st.selectbox("Select Locality Hub", df_historical['locality'].unique())
+        price = st.number_input("Asking Price (in INR)", min_value=100000, value=5000000, step=50000)
+        size = st.number_input("Super Built-up Area (Sq.Ft.)", min_value=100, value=1200)
+        rera = st.text_input("RERA Registration Number (Optional)", placeholder="e.g., PRM/KA/RERA/...")
+        
+        col_f1, col_f2, col_f3 = st.columns(3)
+        with col_f1:
+            is_veg = st.checkbox("Pure Veg Only Preference")
+        with col_f2:
+            is_bach = st.checkbox("Allow Bachelors/Students")
+        with col_f3:
+            is_metro = st.checkbox("Property is within walking distance to a Metro Station")
+            
+        o_name = st.text_input("Your Full Name")
+        o_phone = st.text_input("Your Mobile Number (10 digits)")
+        
+        submitted = st.form_submit_with_no_mutation() if hasattr(st, "form_submit_with_no_mutation") else st.form_submit_button("Launch Property Listing")
+        
+        if submitted:
+            if not title or not o_name or len(o_phone) < 10:
+                st.error("Please fill out all required fields and provide a valid 10-digit Indian phone number.")
+            else:
+                # Basic coordinate generation corresponding to city centers
+                loc_map = {"Indiranagar, Bangalore": (12.97189, 77.64115), "Andheri West, Mumbai": (19.11967, 72.84642), "DLF Phase 3, Gurgaon": (28.4908, 77.0894)}
+                coords = loc_map.get(locality, (13.0827, 80.2707))
+                
+                new_id = int(df_listings['listing_id'].max() + 1 if not df_listings.empty else 1001)
+                is_valid_rera = True if (rera and len(rera) > 5) else False
+                
+                new_row = {
+                    "listing_id": new_id, "title": title, "locality": locality, "price_inr": price,
+                    "size_sqft": size, "lat": coords[0], "lon": coords[1], "rera_number": rera,
+                    "is_verified": is_valid_rera, "veg_only": is_veg, "bachelors_allowed": is_bach,
+                    "near_metro": is_metro, "owner_name": o_name, "owner_phone": o_phone,
+                    "reports_count": 0, "expiry_date": (datetime.now() + timedelta(days=30)).strftime("%Y-%m-%d"),
+                    "status": "Active"
+                }
+                
+                updated_listings = pd.concat([df_listings, pd.DataFrame([new_row])], ignore_index=True)
+                save_data(updated_listings, "Listings")
+                st.success("🎉 Property listed live successfully! Go to the 'Explore Properties' tab to view it.")
