@@ -206,4 +206,4 @@ if menu == "🔍 Explore Properties":
                     st.write(f"📍 **Locality:** {row['locality']} | 📐 **Size:** {row['size_sqft']} Sq.Ft.")
                     
                     metro_val = row.get('near_metro', False)
-                    low_est, high_est = calculate_dwelzestimate(row['size_sqft'], row['locality'], metro_val
+                    low_est, high_est = calculate_dwelzestimate(row['size_sqft'], row['locality'], metro_val)
