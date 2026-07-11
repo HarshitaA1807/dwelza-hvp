@@ -11,13 +11,11 @@ st.set_page_config(page_title="Dwelza - Next Gen Indian Real Estate", page_icon=
 # Custom CSS: Premium Branding + Hiding GitHub / Source Code Links
 st.markdown("""
     <style>
-    /* Completely hide default Streamlit deployment code references */
     #MainMenu {visibility: hidden;}
     header {visibility: hidden;}
     footer {visibility: hidden;}
     .viewerBadge_link__1S137 {display: none !important;}
     
-    /* Branding Styles */
     .main-title { font-size: 46px; font-weight: bold; color: #FF5A5F; text-align: center; margin-bottom: 5px; }
     .sub-title { font-size: 18px; color: #888888; text-align: center; margin-bottom: 25px; }
     .card { padding: 20px; border-radius: 10px; background-color: #f8f9fa; box-shadow: 2px 2px 10px rgba(0,0,0,0.05); margin-bottom: 20px; color: #333333; }
@@ -30,32 +28,36 @@ st.markdown("""
 EXCEL_FILE = "source data.xlsx"
 
 def initialize_database():
-    """Ensures the Excel database exists and fixes missing sheets if file already exists."""
+    """Ensures the Excel database exists with diverse multi-state baseline historical parameters."""
     exp_str = (datetime.now() + timedelta(days=30)).strftime("%Y-%m-%d")
     
     default_listings = {
-        "listing_id": [1001, 1002, 1003],
-        "title": ["Premium 3 BHK Apartment", "Cozy 1 BHK for Bachelors", "Luxury Smart Villa"],
-        "locality": ["Indiranagar, Bangalore", "Andheri West, Mumbai", "DLF Phase 3, Gurgaon"],
-        "price_inr": [18500000, 4500000, 52000000],
-        "size_sqft": [1800, 650, 4200],
-        "lat": [12.97189, 19.11967, 28.4908],
-        "lon": [77.64115, 72.84642, 77.0894],
-        "rera_number": ["PRM/KA/RERA/1251/310/PR/180516/001", "", "HRERA/2022/89"],
-        "is_verified": [True, False, True],
-        "veg_only": [False, True, False],
-        "bachelors_allowed": [True, True, False],
-        "near_metro": [True, True, False],
-        "owner_name": ["Rajesh Kumar", "Amit Sharma", "Vikram Malhotra"],
-        "owner_phone": ["9876543210", "9123456789", "9988776655"],
-        "reports_count": [0, 0, 0],
-        "expiry_date": [exp_str, exp_str, exp_str],
-        "status": ["Active", "Active", "Active"]
+        "listing_id": [1001, 1002, 1003, 1004, 1005],
+        "title": ["Premium 3 BHK Apartment", "Cozy 1 BHK for Bachelors", "Luxury Smart Villa", "Modern Flat near IT Corridor", "Beachside Sea-view Apartment"],
+        "locality": ["Indiranagar, Bangalore", "Andheri West, Mumbai", "DLF Phase 3, Gurgaon", "OMR Sholinganallur, Chennai", "Kakkanad, Kochi"],
+        "price_inr": [18500000, 4500000, 52000000, 8500000, 12000000],
+        "size_sqft": [1800, 650, 4200, 1450, 1600],
+        "lat": [12.97189, 19.11967, 28.4908, 12.9010, 10.0159],
+        "lon": [77.64115, 72.84642, 77.0894, 80.2279, 76.3419],
+        "rera_number": ["PRM/KA/RERA/1251/310/PR/180516/001", "", "HRERA/2022/89", "TN/29/Building/0122/2024", "K-RERA/PRJ/TVM/045/2023"],
+        "is_verified": [True, False, True, True, True],
+        "veg_only": [False, True, False, False, False],
+        "bachelors_allowed": [True, True, False, True, True],
+        "near_metro": [True, True, False, False, True],
+        "owner_name": ["Rajesh Kumar", "Amit Sharma", "Vikram Malhotra", "Suresh Kumar", "Arun Kurian"],
+        "owner_phone": ["9876543210", "9123456789", "9988776655", "9444012345", "9846056789"],
+        "reports_count": [0, 0, 0, 0, 0],
+        "expiry_date": [exp_str] * 5,
+        "status": ["Active"] * 5
     }
     
     default_historical = {
-        "locality": ["Indiranagar, Bangalore", "Andheri West, Mumbai", "DLF Phase 3, Gurgaon"],
-        "avg_price_per_sqft": [9500, 18000, 11500]
+        "locality": [
+            "Indiranagar, Bangalore", "Andheri West, Mumbai", "DLF Phase 3, Gurgaon", 
+            "OMR Sholinganallur, Chennai", "Adyar, Chennai", "Coimbatore Center",
+            "Kakkanad, Kochi", "Thiruvananthapuram City", "Kozhikode Beach"
+        ],
+        "avg_price_per_sqft": [9500, 18000, 11500, 6200, 13500, 5500, 5800, 5200, 4900]
     }
 
     if not os.path.exists(EXCEL_FILE):
@@ -74,22 +76,13 @@ def initialize_database():
             with pd.ExcelWriter(EXCEL_FILE, engine='openpyxl') as writer:
                 pd.DataFrame(default_listings).to_excel(writer, sheet_name="Listings", index=False)
                 pd.DataFrame(default_historical).to_excel(writer, sheet_name="HistoricalSales", index=False)
-                pd.DataFrame(columns=["inquiry_id", "listing_id", "user_name", "user_phone", "timestamp"]).to_excel(writer, sheet_name="Inquiries", index=False)
 
 initialize_database()
 
 def load_data(sheet_name):
     try:
-        df = pd.read_excel(EXCEL_FILE, sheet_name=sheet_name)
-        if sheet_name == "Listings":
-            if "near_metro" not in df.columns:
-                df["near_metro"] = True
-            if "reports_count" not in df.columns:
-                df["reports_count"] = 0
-        return df
+        return pd.read_excel(EXCEL_FILE, sheet_name=sheet_name)
     except Exception:
-        if sheet_name == "HistoricalSales":
-            return pd.DataFrame({"locality": ["Indiranagar, Bangalore"], "avg_price_per_sqft": [9500]})
         return pd.DataFrame()
 
 def save_data(df, sheet_name):
@@ -97,19 +90,36 @@ def save_data(df, sheet_name):
         df.to_excel(writer, sheet_name=sheet_name, index=False)
     st.cache_data.clear()
 
-# --- REAL-TIME INDIAN VALUATION ENGINE ("DWELZESTIMATE") ---
+# --- DYNAMIC REAL-TIME ENGINE WITH FALLBACKS FOR TAMIL NADU / KERALA ---
 def calculate_dwelzestimate(size_sqft, locality, near_metro, historical_df):
+    locality_lower = str(locality).lower()
+    base_rate = None
+    
+    # Step 1: Direct historical database match
     if not historical_df.empty and 'locality' in historical_df.columns:
-        match = historical_df[historical_df['locality'] == locality]
-        base_rate = match['avg_price_per_sqft'].values[0] if not match.empty else 7000
-    else:
-        base_rate = 7000
-        
+        match = historical_df[historical_df['locality'].str.lower() == locality_lower]
+        if not match.empty:
+            base_rate = match['avg_price_per_sqft'].values[0]
+
+    # Step 2: Adaptive Contextual Engine (Handles unspecified spaces in TN, Kerala, etc.)
+    if base_rate is None:
+        if "mumbai" in locality_lower or "delhi" in locality_lower:
+            base_rate = 16000
+        elif "bangalore" in locality_lower or "chennai" in locality_lower or "adyar" in locality_lower:
+            base_rate = 9000
+        elif "tamil" in locality_lower or "nadu" in locality_lower or "coimbatore" in locality_lower or "trichy" in locality_lower:
+            base_rate = 5200  # Tamil Nadu Tier-2 dynamic index baseline
+        elif "kerala" in locality_lower or "kochi" in locality_lower or "trivandrum" in locality_lower or "kakkanad" in locality_lower:
+            base_rate = 5400  # Kerala high-demand baseline index
+        else:
+            base_rate = 6000  # National standard baseline fallback
+
+    # Step 3: Predictive Infrastructure Multipliers
     base_value = size_sqft * base_rate
-    multiplier = 1.06 
+    multiplier = 1.06 # 2026 inflation correction standard
     if near_metro:
         multiplier += 0.12
-    
+        
     final_val = int(base_value * multiplier)
     return int(final_val * 0.95), int(final_val * 1.05)
 
@@ -125,15 +135,15 @@ def format_indian_currency(num):
 st.markdown("<div class='main-title'>DWELZA</div>", unsafe_allow_html=True)
 st.markdown("<div class='sub-title'>Next-Gen Fraud-Free Indian Real Estate Marketplace</div>", unsafe_allow_html=True)
 
-# --- SIDEBAR: NAVIGATION MENU & CLOSED 'ABOUT' DROPDOWN IN THE CORNER ---
+# --- SIDEBAR CONTROL HUB ---
 menu = st.sidebar.selectbox("Navigate Menu", ["🔍 Explore Properties", "🏗️ Owner / Builder Dashboard"])
 
 with st.sidebar.expander("ℹ️ About Dwelza Project", expanded=False):
     st.markdown("""
-    **Dwelza** is engineered around distinct Indian localization parameters outperforming foreign platforms like Zillow:
-    * **Fake Listing Suppression:** Mandates RERA registration field parses combined with community reporting parameters to instantly flags bad listings.
-    * **Privacy Guard System:** Implements runtime active user sessions that mask sensitive owner mobile phone numbers against bot phone scrapers.
-    * **Dwelzestimate Machine Engine:** Programmatic localization value indexes calculated using locality metrics, infrastructure weights (like Metro proximity), and inflation parameters.
+    **Dwelza** is an advanced real estate engine engineered around distinct Indian localization parameters outperforming foreign platforms like Zillow:
+    * **Fake Listing Suppression:** Mandates RERA registration validation combined with active user crowd-sourced reporting algorithms.
+    * **Privacy Guard System:** Implements active runtime sessions that securely mask owner contact items from scraping bots.
+    * **Dynamic Valuation Engine:** Automatically parses location strings to apply predictive tier pricing matrices even if past strict data records don't exist.
     """)
 
 df_listings = load_data("Listings")
@@ -152,7 +162,7 @@ if menu == "🔍 Explore Properties":
     col1, col2, col3, col4 = st.columns(4)
     with col1:
         localities_list = ["All"] + list(df_historical['locality'].unique()) if not df_historical.empty else ["All"]
-        search_locality = st.selectbox("Select Metro Locality", localities_list)
+        search_locality = st.selectbox("Select Metro Locality Hub", localities_list)
     with col2:
         diet_pref = st.checkbox("🟢 Pure Veg Only")
     with col3:
@@ -187,13 +197,12 @@ if menu == "🔍 Explore Properties":
                     st.write(f"📍 **Locality:** {row['locality']} | 📐 **Size:** {row['size_sqft']} Sq.Ft.")
                     
                     metro_val = row.get('near_metro', False)
-                    # FIXED: Added missing historical dataframe argument to eliminate calculation loop crashes
                     low_est, high_est = calculate_dwelzestimate(row['size_sqft'], row['locality'], metro_val, df_historical)
                     
                     st.markdown(f"""
                     <div class='dwelzestimate-box'>
-                        <strong>💡 Dwelzestimate Engine Valuation:</strong> {format_indian_currency(low_est)} - {format_indian_currency(high_est)}<br>
-                        <small>Calculated via custom localized parameters based on baseline index evaluations and location parameters.</small>
+                        <strong>💡 Dwelzestimate Engine Predictive Valuation:</strong> {format_indian_currency(low_est)} - {format_indian_currency(high_est)}<br>
+                        <small>Calculated using dynamic localized tier data indices and specific regional infrastructure weights.</small>
                     </div>
                     """, unsafe_allow_html=True)
                     
@@ -223,11 +232,11 @@ if menu == "🔍 Explore Properties":
 
 # --- MODULE 2: OWNER DASHBOARD ---
 elif menu == "🏗️ Owner / Builder Dashboard":
-    st.subheader("List Your Indian Property")
+    st.subheader("List Your Indian Property (Any State/City)")
     
     with st.form("add_property_form", clear_on_submit=True):
-        title = st.text_input("Property Title")
-        locality = st.selectbox("Select Locality Hub", df_historical['locality'].unique() if not df_historical.empty else ["Indiranagar, Bangalore"])
+        title = st.text_input("Property Title (e.g., Beachside 2BHK)")
+        locality = st.text_input("Locality / City Name (e.g., Kochi, Kerala or Coimbatore, Tamil Nadu)")
         price = st.number_input("Asking Price (INR)", min_value=100000, value=5000000)
         size = st.number_input("Area Size (Sq.Ft.)", min_value=100, value=1200)
         rera = st.text_input("RERA Registration Number")
@@ -245,32 +254,29 @@ elif menu == "🏗️ Owner / Builder Dashboard":
         
         submitted = st.form_submit_button("Launch Property")
         
-        if submitted and title and o_name and len(o_phone) >= 10:
-            loc_map = {"Indiranagar, Bangalore": (12.97189, 77.64115), "Andheri West, Mumbai": (19.11967, 72.84642), "DLF Phase 3, Gurgaon": (28.4908, 77.0894)}
-            coords = loc_map.get(locality, (12.9718, 77.6411))
+        if submitted and title and locality and o_name and len(o_phone) >= 10:
+            # Dynamic geocoding fallback mapping
+            loc_lower = locality.lower()
+            if "chennai" in loc_lower or "tamil" in loc_lower:
+                coords = (12.9010, 80.2279)
+            elif "kochi" in loc_lower or "kerala" in loc_lower:
+                coords = (10.0159, 76.3419)
+            elif "mumbai" in loc_lower:
+                coords = (19.1196, 72.8464)
+            else:
+                coords = (12.9718, 77.6411) # Standard fallback map pin
             
             new_id = int(df_listings['listing_id'].max() + 1 if not df_listings.empty else 1001)
             exp_date_calc = (datetime.now() + timedelta(days=30)).strftime("%Y-%m-%d")
             
             new_row = {
-                "listing_id": new_id, 
-                "title": title, 
-                "locality": locality, 
-                "price_inr": price,
-                "size_sqft": size, 
-                "lat": coords[0], 
-                "lon": coords[1], 
-                "rera_number": rera,
-                "is_verified": bool(rera), 
-                "veg_only": is_veg, 
-                "bachelors_allowed": is_bach,
-                "near_metro": is_metro, 
-                "owner_name": o_name, 
-                "owner_phone": o_phone,
-                "reports_count": 0, 
-                "expiry_date": exp_date_calc, 
-                "status": "Active"
+                "listing_id": new_id, "title": title, "locality": locality, "price_inr": price,
+                "size_sqft": size, "lat": coords[0], "lon": coords[1], "rera_number": rera,
+                "is_verified": bool(rera), "veg_only": is_veg, "bachelors_allowed": is_bach,
+                "near_metro": is_metro, "owner_name": o_name, "owner_phone": o_phone,
+                "reports_count": 0, "expiry_date": exp_date_calc, "status": "Active"
             }
             
             save_data(pd.concat([df_listings, pd.DataFrame([new_row])], ignore_index=True), "Listings")
-            st.success("Property uploaded successfully!")
+            st.success("Property live across India successfully!")
+            st.rerun()
