@@ -882,4 +882,4 @@ def create_templates():
                                 <option value="Visit">Visit</option>
                                 <option value="Rent">Rent</option>
                                 <option value="Buy">Buy</option>
-                            </select
+                            </select''')
