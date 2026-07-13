@@ -1,282 +1,885 @@
 
-import streamlit as st
+# app.py - Complete single file for Dwelza Real Estate Platform
+
+import os
 import pandas as pd
 import numpy as np
-import os
-from datetime import datetime, timedelta
+from flask import Flask, render_template, request, jsonify, redirect, url_for, session
+from flask_sqlalchemy import SQLAlchemy
+from datetime import datetime
+import pickle
+import json
+from werkzeug.security import generate_password_hash, check_password_hash
+import random
 
-# --- PAGE CONFIGURATION & THEME ---
-st.set_page_config(page_title="Dwelza - Next Gen Indian Real Estate", page_icon="🏢", layout="wide")
+# Initialize Flask app
+app = Flask(__name__)
+app.secret_key = 'dwelza_secret_key_2026'
 
-# Custom CSS: Premium Branding + Hiding GitHub / Source Code Links
-st.markdown("""
-    <style>
-    #MainMenu {visibility: hidden;}
-    header {visibility: hidden;}
-    footer {visibility: hidden;}
-    .viewerBadge_link__1S137 {display: none !important;}
-    
-    .main-title { font-size: 46px; font-weight: bold; color: #FF5A5F; text-align: center; margin-bottom: 5px; }
-    .sub-title { font-size: 18px; color: #888888; text-align: center; margin-bottom: 25px; }
-    .card { padding: 20px; border-radius: 10px; background-color: #f8f9fa; box-shadow: 2px 2px 10px rgba(0,0,0,0.05); margin-bottom: 20px; color: #333333; }
-    .verified-badge { background-color: #28a745; color: white; padding: 3px 8px; border-radius: 5px; font-size: 12px; font-weight: bold; }
-    .dwelzestimate-box { background-color: #E8F0FE; padding: 15px; border-radius: 8px; border-left: 5px solid #1A73E8; margin-top: 10px; color: #1E293B; }
-    </style>
-""", unsafe_allow_html=True)
+# Database configuration
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///dwelza.db'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+db = SQLAlchemy(app)
 
-# --- DATABASE / EXCEL INITIALIZATION ---
-EXCEL_FILE = "source data.xlsx"
+# Database Models
+class User(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(80), unique=True, nullable=False)
+    email = db.Column(db.String(120), unique=True, nullable=False)
+    password_hash = db.Column(db.String(200), nullable=False)
+    phone = db.Column(db.String(20))
+    is_broker = db.Column(db.Boolean, default=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
-def initialize_database():
-    """Ensures the Excel database exists with diverse multi-state baseline historical parameters."""
-    exp_str = (datetime.now() + timedelta(days=30)).strftime("%Y-%m-%d")
-    
-    default_listings = {
-        "listing_id": [1001, 1002, 1003, 1004, 1005],
-        "title": ["Premium 3 BHK Apartment", "Cozy 1 BHK for Bachelors", "Luxury Smart Villa", "Modern Flat near IT Corridor", "Beachside Sea-view Apartment"],
-        "locality": ["Indiranagar, Bangalore", "Andheri West, Mumbai", "DLF Phase 3, Gurgaon", "OMR Sholinganallur, Chennai", "Kakkanad, Kochi"],
-        "price_inr": [18500000, 4500000, 52000000, 8500000, 12000000],
-        "size_sqft": [1800, 650, 4200, 1450, 1600],
-        "lat": [12.97189, 19.11967, 28.4908, 12.9010, 10.0159],
-        "lon": [77.64115, 72.84642, 77.0894, 80.2279, 76.3419],
-        "rera_number": ["PRM/KA/RERA/1251/310/PR/180516/001", "", "HRERA/2022/89", "TN/29/Building/0122/2024", "K-RERA/PRJ/TVM/045/2023"],
-        "is_verified": [True, False, True, True, True],
-        "veg_only": [False, True, False, False, False],
-        "bachelors_allowed": [True, True, False, True, True],
-        "near_metro": [True, True, False, False, True],
-        "owner_name": ["Rajesh Kumar", "Amit Sharma", "Vikram Malhotra", "Suresh Kumar", "Arun Kurian"],
-        "owner_phone": ["9876543210", "9123456789", "9988776655", "9444012345", "9846056789"],
-        "reports_count": [0, 0, 0, 0, 0],
-        "expiry_date": [exp_str] * 5,
-        "status": ["Active"] * 5
-    }
-    
-    default_historical = {
-        "locality": [
-            "Indiranagar, Bangalore", "Andheri West, Mumbai", "DLF Phase 3, Gurgaon", 
-            "OMR Sholinganallur, Chennai", "Adyar, Chennai", "Coimbatore Center",
-            "Kakkanad, Kochi", "Thiruvananthapuram City", "Kozhikode Beach"
-        ],
-        "avg_price_per_sqft": [9500, 18000, 11500, 6200, 13500, 5500, 5800, 5200, 4900]
-    }
+    def set_password(self, password):
+        self.password_hash = generate_password_hash(password)
 
-    if not os.path.exists(EXCEL_FILE):
-        with pd.ExcelWriter(EXCEL_FILE, engine='openpyxl') as writer:
-            pd.DataFrame(default_listings).to_excel(writer, sheet_name="Listings", index=False)
-            pd.DataFrame(default_historical).to_excel(writer, sheet_name="HistoricalSales", index=False)
-            pd.DataFrame(columns=["inquiry_id", "listing_id", "user_name", "user_phone", "timestamp"]).to_excel(writer, sheet_name="Inquiries", index=False)
-    else:
-        try:
-            excel_reader = pd.ExcelFile(EXCEL_FILE)
-            sheets_present = excel_reader.sheet_names
-        except Exception:
-            sheets_present = []
+    def check_password(self, password):
+        return check_password_hash(self.password_hash, password)
+
+class Property(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(200), nullable=False)
+    property_type = db.Column(db.String(50))  # House, Apartment, Villa, etc.
+    listing_type = db.Column(db.String(50))  # Rent, Sale, Lease
+    price = db.Column(db.Float, nullable=False)
+    bedrooms = db.Column(db.Integer)
+    bathrooms = db.Column(db.Integer)
+    area_sqft = db.Column(db.Float)
+    location = db.Column(db.String(200))
+    city = db.Column(db.String(100))
+    state = db.Column(db.String(100))
+    description = db.Column(db.Text)
+    broker_id = db.Column(db.Integer, db.ForeignKey('user.id'))
+    broker_name = db.Column(db.String(100))
+    broker_phone = db.Column(db.String(20))
+    broker_email = db.Column(db.String(120))
+    image_url = db.Column(db.String(500))
+    is_available = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+class Booking(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    property_id = db.Column(db.Integer, db.ForeignKey('property.id'))
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'))
+    booking_type = db.Column(db.String(50))  # Visit, Rent, Buy
+    booking_date = db.Column(db.DateTime)
+    status = db.Column(db.String(50), default='Pending')
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+# Create database tables
+with app.app_context():
+    db.create_all()
+
+# Generate sample data (realistic Indian real estate data)
+def generate_sample_properties():
+    if Property.query.count() == 0:
+        # Indian cities with realistic data
+        cities = {
+            'Mumbai': ['Andheri', 'Bandra', 'Colaba', 'Powai', 'Worli'],
+            'Delhi': ['Connaught Place', 'Lajpat Nagar', 'Saket', 'Dwarka', 'Rohini'],
+            'Bangalore': ['Koramangala', 'Indiranagar', 'Whitefield', 'Jayanagar', 'MG Road'],
+            'Chennai': ['T Nagar', 'Adyar', 'Mylapore', 'Velachery', 'Ann Arbor'],
+            'Hyderabad': ['Banjara Hills', 'Jubilee Hills', 'Gachibowli', 'Hitec City', 'Kukatpally'],
+            'Pune': ['Koregaon Park', 'Kothrud', 'Wakad', 'Hinjewadi', 'Viman Nagar']
+        }
         
-        if "Listings" not in sheets_present or "HistoricalSales" not in sheets_present:
-            with pd.ExcelWriter(EXCEL_FILE, engine='openpyxl') as writer:
-                pd.DataFrame(default_listings).to_excel(writer, sheet_name="Listings", index=False)
-                pd.DataFrame(default_historical).to_excel(writer, sheet_name="HistoricalSales", index=False)
-
-initialize_database()
-
-def load_data(sheet_name):
-    try:
-        return pd.read_excel(EXCEL_FILE, sheet_name=sheet_name)
-    except Exception:
-        return pd.DataFrame()
-
-def save_data(df, sheet_name):
-    with pd.ExcelWriter(EXCEL_FILE, engine='openpyxl', mode='a', if_sheet_exists='replace') as writer:
-        df.to_excel(writer, sheet_name=sheet_name, index=False)
-    st.cache_data.clear()
-
-# --- DYNAMIC REAL-TIME ENGINE WITH FALLBACKS FOR TAMIL NADU / KERALA ---
-def calculate_dwelzestimate(size_sqft, locality, near_metro, historical_df):
-    locality_lower = str(locality).lower()
-    base_rate = None
-    
-    # Step 1: Direct historical database match
-    if not historical_df.empty and 'locality' in historical_df.columns:
-        match = historical_df[historical_df['locality'].str.lower() == locality_lower]
-        if not match.empty:
-            base_rate = match['avg_price_per_sqft'].values[0]
-
-    # Step 2: Adaptive Contextual Engine (Handles unspecified spaces in TN, Kerala, etc.)
-    if base_rate is None:
-        if "mumbai" in locality_lower or "delhi" in locality_lower:
-            base_rate = 16000
-        elif "bangalore" in locality_lower or "chennai" in locality_lower or "adyar" in locality_lower:
-            base_rate = 9000
-        elif "tamil" in locality_lower or "nadu" in locality_lower or "coimbatore" in locality_lower or "trichy" in locality_lower:
-            base_rate = 5200  # Tamil Nadu Tier-2 dynamic index baseline
-        elif "kerala" in locality_lower or "kochi" in locality_lower or "trivandrum" in locality_lower or "kakkanad" in locality_lower:
-            base_rate = 5400  # Kerala high-demand baseline index
-        else:
-            base_rate = 6000  # National standard baseline fallback
-
-    # Step 3: Predictive Infrastructure Multipliers
-    base_value = size_sqft * base_rate
-    multiplier = 1.06 # 2026 inflation correction standard
-    if near_metro:
-        multiplier += 0.12
+        property_types = ['Apartment', 'Villa', 'Independent House', 'Studio', 'Penthouse']
+        listing_types = ['Rent', 'Sale', 'Lease']
         
-    final_val = int(base_value * multiplier)
-    return int(final_val * 0.95), int(final_val * 1.05)
-
-def format_indian_currency(num):
-    if num >= 10000000:
-        return f"₹{num / 10000000:.2f} Crore"
-    elif num >= 100000:
-        return f"₹{num / 100000:.2f} Lakh"
-    else:
-        return f"₹{num:,}"
-
-# --- APP BRANDING HEADER ---
-st.markdown("<div class='main-title'>DWELZA</div>", unsafe_allow_html=True)
-st.markdown("<div class='sub-title'>Next-Gen Fraud-Free Indian Real Estate Marketplace</div>", unsafe_allow_html=True)
-
-# --- SIDEBAR CONTROL HUB ---
-menu = st.sidebar.selectbox("Navigate Menu", ["🔍 Explore Properties", "🏗️ Owner / Builder Dashboard"])
-
-with st.sidebar.expander("ℹ️ About Dwelza Project", expanded=False):
-    st.markdown("""
-    **Dwelza** is an advanced real estate engine engineered around distinct Indian localization parameters outperforming foreign platforms like Zillow:
-    * **Fake Listing Suppression:** Mandates RERA registration validation combined with active user crowd-sourced reporting algorithms.
-    * **Privacy Guard System:** Implements active runtime sessions that securely mask owner contact items from scraping bots.
-    * **Dynamic Valuation Engine:** Automatically parses location strings to apply predictive tier pricing matrices even if past strict data records don't exist.
-    """)
-
-df_listings = load_data("Listings")
-df_historical = load_data("HistoricalSales")
-
-if not df_listings.empty and 'reports_count' in df_listings.columns:
-    df_listings.loc[df_listings['reports_count'] >= 3, 'status'] = 'Under Review'
-    active_listings = df_listings[df_listings['status'] == 'Active']
-else:
-    active_listings = df_listings
-
-# --- MODULE 1: EXPLORE PROPERTIES ---
-if menu == "🔍 Explore Properties":
-    st.subheader("Explore Verified Property Feeds")
-    
-    col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        localities_list = ["All"] + list(df_historical['locality'].unique()) if not df_historical.empty else ["All"]
-        search_locality = st.selectbox("Select Metro Locality Hub", localities_list)
-    with col2:
-        diet_pref = st.checkbox("🟢 Pure Veg Only")
-    with col3:
-        bachelor_pref = st.checkbox("🎓 Bachelors Welcome")
-    with col4:
-        max_price = st.slider("Max Budget (INR)", min_value=1000000, max_value=100000000, value=75000000, step=500000)
-
-    filtered_df = active_listings.copy()
-    if not filtered_df.empty:
-        if search_locality != "All" and 'locality' in filtered_df.columns:
-            filtered_df = filtered_df[filtered_df['locality'] == search_locality]
-        if diet_pref and 'veg_only' in filtered_df.columns:
-            filtered_df = filtered_df[filtered_df['veg_only'] == True]
-        if bachelor_pref and 'bachelors_allowed' in filtered_df.columns:
-            filtered_df = filtered_df[filtered_df['bachelors_allowed'] == True]
-        if 'price_inr' in filtered_df.columns:
-            filtered_df = filtered_df[filtered_df['price_inr'] <= max_price]
-
-    if not filtered_df.empty and 'lat' in filtered_df.columns:
-        st.write(f"Showing {len(filtered_df)} verified live listings:")
-        st.map(filtered_df[['lat', 'lon']])
+        # Sample brokers (realistic Indian names and numbers)
+        brokers = [
+            {'name': 'Rajesh Kumar', 'phone': '+91 98100 12345', 'email': 'rajesh.k@dwelza.com'},
+            {'name': 'Priya Sharma', 'phone': '+91 98200 23456', 'email': 'priya.s@dwelza.com'},
+            {'name': 'Amit Patel', 'phone': '+91 98300 34567', 'email': 'amit.p@dwelza.com'},
+            {'name': 'Sneha Reddy', 'phone': '+91 98400 45678', 'email': 'sneha.r@dwelza.com'},
+            {'name': 'Vikram Singh', 'phone': '+91 98500 56789', 'email': 'vikram.s@dwelza.com'},
+            {'name': 'Anjali Mehta', 'phone': '+91 98600 67890', 'email': 'anjali.m@dwelza.com'},
+            {'name': 'Suresh Iyer', 'phone': '+91 98700 78901', 'email': 'suresh.i@dwelza.com'},
+            {'name': 'Deepa Nair', 'phone': '+91 98800 89012', 'email': 'deepa.n@dwelza.com'},
+        ]
         
-        for idx, row in filtered_df.iterrows():
-            with st.container():
-                st.markdown("<div class='card'>", unsafe_allow_html=True)
-                c_left, c_right = st.columns([2, 1])
-                
-                with c_left:
-                    is_ver = row.get('is_verified', False)
-                    badge = "<span class='verified-badge'>✓ RERA VERIFIED</span>" if is_ver else ""
-                    st.markdown(f"### {row['title']} {badge}", unsafe_allow_html=True)
-                    st.write(f"📍 **Locality:** {row['locality']} | 📐 **Size:** {row['size_sqft']} Sq.Ft.")
+        for city, areas in cities.items():
+            for area in areas:
+                for _ in range(3):  # 3 properties per area
+                    broker = random.choice(brokers)
+                    prop_type = random.choice(property_types)
+                    listing = random.choice(listing_types)
                     
-                    metro_val = row.get('near_metro', False)
-                    low_est, high_est = calculate_dwelzestimate(row['size_sqft'], row['locality'], metro_val, df_historical)
+                    # Generate realistic price based on city and type
+                    base_price = random.randint(3000, 20000)
+                    if city == 'Mumbai':
+                        base_price *= 2
+                    elif city in ['Delhi', 'Bangalore']:
+                        base_price *= 1.5
                     
-                    st.markdown(f"""
-                    <div class='dwelzestimate-box'>
-                        <strong>💡 Dwelzestimate Engine Predictive Valuation:</strong> {format_indian_currency(low_est)} - {format_indian_currency(high_est)}<br>
-                        <small>Calculated using dynamic localized tier data indices and specific regional infrastructure weights.</small>
-                    </div>
-                    """, unsafe_allow_html=True)
-                    
-                with c_right:
-                    st.subheader(format_indian_currency(row['price_inr']))
-                    
-                    mask_key = f"mask_{row['listing_id']}"
-                    if mask_key not in st.session_state:
-                        st.session_state[mask_key] = True
-                        
-                    if st.session_state[mask_key]:
-                        st.write("📞 Contact: `+91 XXXXX-XX" + str(row['owner_phone'])[-3:] + "`")
-                        if st.button("Unlock Contact Details", key=f"btn_{row['listing_id']}"):
-                            st.session_state[mask_key] = False
-                            st.rerun()
+                    if listing == 'Rent':
+                        price = base_price * random.randint(5, 20)
                     else:
-                        st.success(f"📞 Contact {row['owner_name']}: {row['owner_phone']}")
+                        price = base_price * random.randint(100, 300)
                     
-                    if st.button("🚨 Report Fake / Stale", key=f"rep_{row['listing_id']}"):
-                        df_listings.at[idx, 'reports_count'] += 1
-                        save_data(df_listings, "Listings")
-                        st.warning("Report recorded.")
-                        st.rerun()
-                st.markdown("</div>", unsafe_allow_html=True)
-    else:
-        st.info("No matching live properties found.")
+                    property = Property(
+                        title=f"{random.choice(['Luxury', 'Premium', 'Spacious', 'Elegant', 'Modern'])} {prop_type} in {area}",
+                        property_type=prop_type,
+                        listing_type=listing,
+                        price=round(price, 0),
+                        bedrooms=random.randint(1, 5),
+                        bathrooms=random.randint(1, 4),
+                        area_sqft=round(random.randint(500, 4000) / 100) * 100,
+                        location=area,
+                        city=city,
+                        state=city + " State",
+                        description=f"Beautiful {prop_type.lower()} located in prime location of {area}. "
+                                   f"Features {random.randint(1, 5)} bedrooms, {random.randint(1, 4)} bathrooms, "
+                                   f"and modern amenities. Close to schools, hospitals, and shopping centers.",
+                        broker_id=1,  # Default user
+                        broker_name=broker['name'],
+                        broker_phone=broker['phone'],
+                        broker_email=broker['email'],
+                        image_url=f"https://source.unsplash.com/800x600/?house,{city},{area}",
+                        is_available=True
+                    )
+                    db.session.add(property)
+        
+        db.session.commit()
 
-# --- MODULE 2: OWNER DASHBOARD ---
-elif menu == "🏗️ Owner / Builder Dashboard":
-    st.subheader("List Your Indian Property (Any State/City)")
+# Generate sample users
+def generate_sample_users():
+    if User.query.count() == 0:
+        # Create broker users
+        brokers = [
+            {'username': 'rajesh_k', 'email': 'rajesh.k@dwelza.com', 'phone': '+91 98100 12345'},
+            {'username': 'priya_s', 'email': 'priya.s@dwelza.com', 'phone': '+91 98200 23456'},
+            {'username': 'amit_p', 'email': 'amit.p@dwelza.com', 'phone': '+91 98300 34567'},
+        ]
+        
+        for broker in brokers:
+            user = User(
+                username=broker['username'],
+                email=broker['email'],
+                phone=broker['phone'],
+                is_broker=True
+            )
+            user.set_password('broker123')
+            db.session.add(user)
+        
+        # Create regular user
+        user = User(
+            username='dwelza_user',
+            email='user@dwelza.com',
+            phone='+91 90000 00000',
+            is_broker=False
+        )
+        user.set_password('user123')
+        db.session.add(user)
+        
+        db.session.commit()
+
+# Generate sample data
+with app.app_context():
+    generate_sample_users()
+    generate_sample_properties()
+
+# Routes
+@app.route('/')
+def home():
+    # Get featured properties
+    featured = Property.query.filter_by(is_available=True).limit(6).all()
+    return render_template('index.html', featured=featured)
+
+@app.route('/properties')
+def properties():
+    # Filter properties
+    listing_type = request.args.get('type', 'all')
+    city = request.args.get('city', 'all')
+    min_price = request.args.get('min_price', '0')
+    max_price = request.args.get('max_price', '10000000')
     
-    with st.form("add_property_form", clear_on_submit=True):
-        title = st.text_input("Property Title (e.g., Beachside 2BHK)")
-        locality = st.text_input("Locality / City Name (e.g., Kochi, Kerala or Coimbatore, Tamil Nadu)")
-        price = st.number_input("Asking Price (INR)", min_value=100000, value=5000000)
-        size = st.number_input("Area Size (Sq.Ft.)", min_value=100, value=1200)
-        rera = st.text_input("RERA Registration Number")
+    query = Property.query.filter_by(is_available=True)
+    
+    if listing_type != 'all':
+        query = query.filter_by(listing_type=listing_type)
+    if city != 'all':
+        query = query.filter_by(city=city)
+    if min_price:
+        query = query.filter(Property.price >= float(min_price))
+    if max_price:
+        query = query.filter(Property.price <= float(max_price))
+    
+    properties = query.all()
+    
+    # Get unique cities for filter
+    cities = db.session.query(Property.city).distinct().all()
+    cities = [c[0] for c in cities]
+    
+    return render_template('properties.html', properties=properties, cities=cities)
+
+@app.route('/property/<int:property_id>')
+def property_detail(property_id):
+    property = Property.query.get_or_404(property_id)
+    return render_template('property_detail.html', property=property)
+
+@app.route('/about')
+def about():
+    return render_template('about.html')
+
+@app.route('/contact')
+def contact():
+    return render_template('contact.html')
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        username = request.form.get('username')
+        password = request.form.get('password')
         
-        col_f1, col_f2, col_f3 = st.columns(3)
-        with col_f1:
-            is_veg = st.checkbox("Pure Veg Only")
-        with col_f2:
-            is_bach = st.checkbox("Bachelors Allowed")
-        with col_f3:
-            is_metro = st.checkbox("Near Metro Station")
-            
-        o_name = st.text_input("Owner Name")
-        o_phone = st.text_input("Mobile Number")
+        user = User.query.filter_by(username=username).first()
+        if user and user.check_password(password):
+            session['user_id'] = user.id
+            session['username'] = user.username
+            session['is_broker'] = user.is_broker
+            return redirect(url_for('dashboard'))
         
-        submitted = st.form_submit_button("Launch Property")
+        return render_template('login.html', error='Invalid credentials')
+    
+    return render_template('login.html')
+
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    if request.method == 'POST':
+        username = request.form.get('username')
+        email = request.form.get('email')
+        password = request.form.get('password')
+        phone = request.form.get('phone')
+        is_broker = request.form.get('is_broker') == 'on'
         
-        if submitted and title and locality and o_name and len(o_phone) >= 10:
-            # Dynamic geocoding fallback mapping
-            loc_lower = locality.lower()
-            if "chennai" in loc_lower or "tamil" in loc_lower:
-                coords = (12.9010, 80.2279)
-            elif "kochi" in loc_lower or "kerala" in loc_lower:
-                coords = (10.0159, 76.3419)
-            elif "mumbai" in loc_lower:
-                coords = (19.1196, 72.8464)
-            else:
-                coords = (12.9718, 77.6411) # Standard fallback map pin
+        if User.query.filter_by(username=username).first():
+            return render_template('register.html', error='Username already exists')
+        
+        if User.query.filter_by(email=email).first():
+            return render_template('register.html', error='Email already registered')
+        
+        user = User(
+            username=username,
+            email=email,
+            phone=phone,
+            is_broker=is_broker
+        )
+        user.set_password(password)
+        db.session.add(user)
+        db.session.commit()
+        
+        return redirect(url_for('login'))
+    
+    return render_template('register.html')
+
+@app.route('/logout')
+def logout():
+    session.clear()
+    return redirect(url_for('home'))
+
+@app.route('/dashboard')
+def dashboard():
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    
+    user = User.query.get(session['user_id'])
+    
+    if user.is_broker:
+        properties = Property.query.filter_by(broker_id=user.id).all()
+        return render_template('broker_dashboard.html', user=user, properties=properties)
+    else:
+        bookings = Booking.query.filter_by(user_id=user.id).all()
+        return render_template('user_dashboard.html', user=user, bookings=bookings)
+
+@app.route('/add_property', methods=['GET', 'POST'])
+def add_property():
+    if 'user_id' not in session or not session.get('is_broker'):
+        return redirect(url_for('login'))
+    
+    if request.method == 'POST':
+        property = Property(
+            title=request.form.get('title'),
+            property_type=request.form.get('property_type'),
+            listing_type=request.form.get('listing_type'),
+            price=float(request.form.get('price')),
+            bedrooms=int(request.form.get('bedrooms')),
+            bathrooms=int(request.form.get('bathrooms')),
+            area_sqft=float(request.form.get('area_sqft')),
+            location=request.form.get('location'),
+            city=request.form.get('city'),
+            state=request.form.get('state'),
+            description=request.form.get('description'),
+            broker_id=session['user_id'],
+            broker_name=User.query.get(session['user_id']).username,
+            broker_phone=User.query.get(session['user_id']).phone,
+            broker_email=User.query.get(session['user_id']).email,
+            is_available=True
+        )
+        db.session.add(property)
+        db.session.commit()
+        return redirect(url_for('dashboard'))
+    
+    return render_template('add_property.html')
+
+@app.route('/book_property/<int:property_id>', methods=['POST'])
+def book_property(property_id):
+    if 'user_id' not in session:
+        return jsonify({'error': 'Please login first'}), 401
+    
+    booking = Booking(
+        property_id=property_id,
+        user_id=session['user_id'],
+        booking_type=request.form.get('booking_type'),
+        booking_date=datetime.now()
+    )
+    db.session.add(booking)
+    db.session.commit()
+    
+    return jsonify({'success': True, 'message': 'Booking confirmed!'})
+
+@app.route('/api/properties')
+def api_properties():
+    properties = Property.query.filter_by(is_available=True).all()
+    return jsonify([{
+        'id': p.id,
+        'title': p.title,
+        'price': p.price,
+        'city': p.city,
+        'listing_type': p.listing_type,
+        'broker_name': p.broker_name,
+        'broker_phone': p.broker_phone
+    } for p in properties])
+
+# Create templates directory and template files
+def create_templates():
+    os.makedirs('templates', exist_ok=True)
+    
+    # Base template
+    with open('templates/base.html', 'w') as f:
+        f.write('''
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dwelza - India's Premier Real Estate Platform</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        :root {
+            --primary-color: #1a73e8;
+            --secondary-color: #34a853;
+            --accent-color: #ea4335;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f8f9fa;
+        }
+        
+        .navbar-dwelza {
+            background: linear-gradient(135deg, #1a73e8 0%, #0d47a1 100%);
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        .navbar-dwelza .navbar-brand {
+            font-weight: 700;
+            font-size: 1.8rem;
+            color: white !important;
+        }
+        
+        .navbar-dwelza .nav-link {
+            color: rgba(255,255,255,0.9) !important;
+            font-weight: 500;
+            transition: all 0.3s;
+        }
+        
+        .navbar-dwelza .nav-link:hover {
+            color: white !important;
+            transform: translateY(-2px);
+        }
+        
+        .hero-section {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 100px 0;
+            margin-bottom: 50px;
+        }
+        
+        .hero-title {
+            font-size: 3.5rem;
+            font-weight: 700;
+            margin-bottom: 20px;
+        }
+        
+        .hero-subtitle {
+            font-size: 1.3rem;
+            opacity: 0.9;
+            margin-bottom: 30px;
+        }
+        
+        .property-card {
+            background: white;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.08);
+            transition: all 0.3s;
+            height: 100%;
+        }
+        
+        .property-card:hover {
+            transform: translateY(-10px);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+        }
+        
+        .property-card img {
+            width: 100%;
+            height: 200px;
+            object-fit: cover;
+        }
+        
+        .property-card .card-body {
+            padding: 20px;
+        }
+        
+        .property-card .price {
+            color: var(--primary-color);
+            font-size: 1.5rem;
+            font-weight: 700;
+        }
+        
+        .property-card .location {
+            color: #666;
+            font-size: 0.95rem;
+        }
+        
+        .property-card .broker-info {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 8px;
+            margin-top: 10px;
+        }
+        
+        .btn-dwelza {
+            background: var(--primary-color);
+            color: white;
+            padding: 10px 25px;
+            border-radius: 25px;
+            border: none;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+        
+        .btn-dwelza:hover {
+            background: #0d47a1;
+            transform: scale(1.05);
+            color: white;
+        }
+        
+        .btn-dwelza-outline {
+            border: 2px solid var(--primary-color);
+            color: var(--primary-color);
+            background: transparent;
+            padding: 10px 25px;
+            border-radius: 25px;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+        
+        .btn-dwelza-outline:hover {
+            background: var(--primary-color);
+            color: white;
+        }
+        
+        .footer {
+            background: #2c3e50;
+            color: white;
+            padding: 50px 0 20px 0;
+            margin-top: 50px;
+        }
+        
+        .footer a {
+            color: rgba(255,255,255,0.8);
+            text-decoration: none;
+            transition: color 0.3s;
+        }
+        
+        .footer a:hover {
+            color: white;
+        }
+        
+        .filter-section {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+            margin-bottom: 30px;
+        }
+        
+        .badge-dwelza {
+            background: var(--primary-color);
+            color: white;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-weight: 500;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dwelza">
+        <div class="container">
+            <a class="navbar-brand" href="{{ url_for('home') }}">
+                <i class="fas fa-home"></i> Dwelza
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('properties') }}">
+                            <i class="fas fa-search"></i> Properties
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('about') }}">
+                            <i class="fas fa-info-circle"></i> About
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('contact') }}">
+                            <i class="fas fa-phone"></i> Contact
+                        </a>
+                    </li>
+                    {% if session.user_id %}
+                        <li class="nav-item">
+                            <a class="nav-link" href="{{ url_for('dashboard') }}">
+                                <i class="fas fa-user"></i> Dashboard
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="{{ url_for('logout') }}">
+                                <i class="fas fa-sign-out-alt"></i> Logout
+                            </a>
+                        </li>
+                    {% else %}
+                        <li class="nav-item">
+                            <a class="nav-link" href="{{ url_for('login') }}">
+                                <i class="fas fa-sign-in-alt"></i> Login
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="{{ url_for('register') }}">
+                                <i class="fas fa-user-plus"></i> Register
+                            </a>
+                        </li>
+                    {% endif %}
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    {% block content %}{% endblock %}
+
+    <footer class="footer">
+        <div class="container">
+            <div class="row">
+                <div class="col-md-4">
+                    <h4><i class="fas fa-home"></i> Dwelza</h4>
+                    <p>India's premier real estate platform for buying, selling, and renting properties.</p>
+                    <div class="mt-3">
+                        <a href="#" class="me-2"><i class="fab fa-facebook fa-2x"></i></a>
+                        <a href="#" class="me-2"><i class="fab fa-twitter fa-2x"></i></a>
+                        <a href="#" class="me-2"><i class="fab fa-instagram fa-2x"></i></a>
+                        <a href="#"><i class="fab fa-linkedin fa-2x"></i></a>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <h5>Quick Links</h5>
+                    <ul class="list-unstyled">
+                        <li><a href="{{ url_for('properties') }}">Browse Properties</a></li>
+                        <li><a href="{{ url_for('about') }}">About Us</a></li>
+                        <li><a href="{{ url_for('contact') }}">Contact Us</a></li>
+                        <li><a href="#">Privacy Policy</a></li>
+                    </ul>
+                </div>
+                <div class="col-md-4">
+                    <h5>Contact Info</h5>
+                    <p><i class="fas fa-phone"></i> +91 1800 123 4567</p>
+                    <p><i class="fas fa-envelope"></i> info@dwelza.com</p>
+                    <p><i class="fas fa-map-marker-alt"></i> Mumbai, India</p>
+                </div>
+            </div>
+            <hr class="bg-light">
+            <div class="text-center">
+                <p>&copy; 2026 Dwelza. All rights reserved.</p>
+            </div>
+        </div>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>
+        ''')
+
+    # Index page
+    with open('templates/index.html', 'w') as f:
+        f.write('''
+{% extends "base.html" %}
+
+{% block content %}
+<div class="hero-section">
+    <div class="container text-center">
+        <h1 class="hero-title">Find Your Dream Home in India</h1>
+        <p class="hero-subtitle">Discover the perfect property across India's top cities. Rent, buy, or lease with Dwelza.</p>
+        <div class="row justify-content-center">
+            <div class="col-md-8">
+                <div class="input-group input-group-lg">
+                    <input type="text" class="form-control" placeholder="Search by city, location, or property type...">
+                    <button class="btn btn-light"><i class="fas fa-search"></i> Search</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="container">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h2 class="text-center">Featured Properties</h2>
+            <p class="text-center text-muted">Handpicked properties across India</p>
+        </div>
+    </div>
+    <div class="row">
+        {% for property in featured %}
+        <div class="col-md-4 mb-4">
+            <div class="property-card">
+                <img src="{{ property.image_url or 'https://via.placeholder.com/800x600' }}" alt="{{ property.title }}">
+                <div class="card-body">
+                    <h5 class="card-title">{{ property.title }}</h5>
+                    <p class="price">₹{{ "{:,.0f}".format(property.price) }}/-</p>
+                    <p class="location"><i class="fas fa-map-marker-alt"></i> {{ property.location }}, {{ property.city }}</p>
+                    <div class="d-flex justify-content-between mb-2">
+                        <span><i class="fas fa-bed"></i> {{ property.bedrooms }} BHK</span>
+                        <span><i class="fas fa-bath"></i> {{ property.bathrooms }} Bath</span>
+                        <span><i class="fas fa-vector-square"></i> {{ property.area_sqft }} sq ft</span>
+                    </div>
+                    <span class="badge badge-dwelza mb-2">{{ property.listing_type }}</span>
+                    <div class="broker-info">
+                        <small><i class="fas fa-user"></i> {{ property.broker_name }}</small>
+                        <small class="float-end"><i class="fas fa-phone"></i> {{ property.broker_phone }}</small>
+                    </div>
+                    <a href="{{ url_for('property_detail', property_id=property.id) }}" class="btn btn-dwelza w-100 mt-2">View Details</a>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    
+    <div class="row mt-5">
+        <div class="col-12 text-center">
+            <a href="{{ url_for('properties') }}" class="btn btn-dwelza-outline btn-lg">View All Properties</a>
+        </div>
+    </div>
+</div>
+
+<!-- Quick Stats -->
+<div class="container mt-5">
+    <div class="row text-center">
+        <div class="col-md-3">
+            <div class="stat-box">
+                <h3>500+</h3>
+                <p>Properties Listed</p>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-box">
+                <h3>50+</h3>
+                <p>Trusted Brokers</p>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-box">
+                <h3>20+</h3>
+                <p>Cities Covered</p>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-box">
+                <h3>1000+</h3>
+                <p>Happy Clients</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.stat-box {
+    background: white;
+    padding: 30px 20px;
+    border-radius: 12px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.08);
+    transition: transform 0.3s;
+}
+.stat-box:hover {
+    transform: scale(1.05);
+}
+.stat-box h3 {
+    color: var(--primary-color);
+    font-weight: 700;
+    font-size: 2.5rem;
+}
+.stat-box p {
+    color: #666;
+    margin-bottom: 0;
+}
+</style>
+{% endblock %}
+        ''')
+
+    # Properties page
+    with open('templates/properties.html', 'w') as f:
+        f.write('''
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-4">
+    <h1 class="text-center mb-4">Browse Properties</h1>
+    
+    <div class="filter-section">
+        <form method="GET" class="row g-3">
+            <div class="col-md-3">
+                <label class="form-label">Listing Type</label>
+                <select name="type" class="form-select">
+                    <option value="all">All Types</option>
+                    <option value="Rent">Rent</option>
+                    <option value="Sale">Sale</option>
+                    <option value="Lease">Lease</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">City</label>
+                <select name="city" class="form-select">
+                    <option value="all">All Cities</option>
+                    {% for city in cities %}
+                    <option value="{{ city }}">{{ city }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Min Price</label>
+                <input type="number" name="min_price" class="form-control" placeholder="Min">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Max Price</label>
+                <input type="number" name="max_price" class="form-control" placeholder="Max">
+            </div>
+            <div class="col-md-2 d-flex align-items-end">
+                <button type="submit" class="btn btn-dwelza w-100">Apply Filters</button>
+            </div>
+        </form>
+    </div>
+    
+    <div class="row">
+        {% for property in properties %}
+        <div class="col-md-4 mb-4">
+            <div class="property-card">
+                <img src="{{ property.image_url or 'https://via.placeholder.com/800x600' }}" alt="{{ property.title }}">
+                <div class="card-body">
+                    <h5 class="card-title">{{ property.title }}</h5>
+                    <p class="price">₹{{ "{:,.0f}".format(property.price) }}/-</p>
+                    <p class="location"><i class="fas fa-map-marker-alt"></i> {{ property.location }}, {{ property.city }}</p>
+                    <div class="d-flex justify-content-between mb-2">
+                        <span><i class="fas fa-bed"></i> {{ property.bedrooms }} BHK</span>
+                        <span><i class="fas fa-bath"></i> {{ property.bathrooms }} Bath</span>
+                        <span><i class="fas fa-vector-square"></i> {{ property.area_sqft }} sq ft</span>
+                    </div>
+                    <span class="badge badge-dwelza mb-2">{{ property.listing_type }}</span>
+                    <div class="broker-info">
+                        <small><i class="fas fa-user"></i> {{ property.broker_name }}</small>
+                        <small class="float-end"><i class="fas fa-phone"></i> {{ property.broker_phone }}</small>
+                    </div>
+                    <a href="{{ url_for('property_detail', property_id=property.id) }}" class="btn btn-dwelza w-100 mt-2">View Details</a>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}
+        ''')
+
+    # Property detail page
+    with open('templates/property_detail.html', 'w') as f:
+        f.write('''
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-md-8">
+            <img src="{{ property.image_url or 'https://via.placeholder.com/800x600' }}" class="img-fluid rounded" alt="{{ property.title }}">
+            <h2 class="mt-3">{{ property.title }}</h2>
+            <p><i class="fas fa-map-marker-alt"></i> {{ property.location }}, {{ property.city }}, {{ property.state }}</p>
             
-            new_id = int(df_listings['listing_id'].max() + 1 if not df_listings.empty else 1001)
-            exp_date_calc = (datetime.now() + timedelta(days=30)).strftime("%Y-%m-%d")
+            <div class="row mt-4">
+                <div class="col-md-3">
+                    <div class="border rounded p-3 text-center">
+                        <h5>₹{{ "{:,.0f}".format(property.price) }}</h5>
+                        <small>Price</small>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="border rounded p-3 text-center">
+                        <h5>{{ property.bedrooms }} BHK</h5>
+                        <small>Bedrooms</small>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="border rounded p-3 text-center">
+                        <h5>{{ property.bathrooms }}</h5>
+                        <small>Bathrooms</small>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="border rounded p-3 text-center">
+                        <h5>{{ property.area_sqft }} sq ft</h5>
+                        <small>Area</small>
+                    </div>
+                </div>
+            </div>
             
-            new_row = {
-                "listing_id": new_id, "title": title, "locality": locality, "price_inr": price,
-                "size_sqft": size, "lat": coords[0], "lon": coords[1], "rera_number": rera,
-                "is_verified": bool(rera), "veg_only": is_veg, "bachelors_allowed": is_bach,
-                "near_metro": is_metro, "owner_name": o_name, "owner_phone": o_phone,
-                "reports_count": 0, "expiry_date": exp_date_calc, "status": "Active"
-            }
+            <h4 class="mt-4">Description</h4>
+            <p>{{ property.description }}</p>
             
-            save_data(pd.concat([df_listings, pd.DataFrame([new_row])], ignore_index=True), "Listings")
-            st.success("Property live across India successfully!")
-            st.rerun()
+            <h4 class="mt-4">Property Details</h4>
+            <ul class="list-group">
+                <li class="list-group-item"><strong>Property Type:</strong> {{ property.property_type }}</li>
+                <li class="list-group-item"><strong>Listing Type:</strong> {{ property.listing_type }}</li>
+                <li class="list-group-item"><strong>Location:</strong> {{ property.location }}</li>
+                <li class="list-group-item"><strong>City:</strong> {{ property.city }}</li>
+                <li class="list-group-item"><strong>State:</strong> {{ property.state }}</li>
+            </ul>
+        </div>
+        
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Contact Broker</h5>
+                    <div class="broker-info mb-3">
+                        <p><strong><i class="fas fa-user"></i> {{ property.broker_name }}</strong></p>
+                        <p><i class="fas fa-phone"></i> {{ property.broker_phone }}</p>
+                        <p><i class="fas fa-envelope"></i> {{ property.broker_email }}</p>
+                    </div>
+                    
+                    <form action="{{ url_for('book_property', property_id=property.id) }}" method="POST">
+                        <div class="mb-3">
+                            <label class="form-label">Interested in</label>
+                            <select name="booking_type" class="form-select" required>
+                                <option value="Visit">Visit</option>
+                                <option value="Rent">Rent</option>
+                                <option value="Buy">Buy</option>
+                            </select
