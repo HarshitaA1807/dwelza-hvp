@@ -121,4 +121,4 @@ def initialize_database():
     
     default_historical = {
         "locality": ["Indiranagar, Bangalore", "Andheri West, Mumbai", "DLF Phase 3, Gurgaon", "OMR Sholinganallur, Chennai", "Adyar, Chennai", "Coimbatore Center", "Kakkanad, Kochi", "Thiruvananthapuram City"],
-        "avg_price_per_sqft":
+        "avg_price_per_sqft":}
