@@ -67,4 +67,4 @@ def initialize_database():
                     pd.DataFrame(default_historical).to_excel(writer, sheet_name="HistoricalSales", index=False)
         except:
             with pd.ExcelWriter(EXCEL_FILE, engine='openpyxl') as writer:
-                pd.DataFrame(default_listings).to_excel(writer, sheet_
+                pd.DataFrame(default_listings).to_excel(writer, sheet_)
