@@ -8,27 +8,32 @@ import plotly.express as px
 from datetime import datetime, timedelta
 
 # --- PRE-LOAD INTERACTIVE CONFIGURATION & CUSTOM DESIGN SHIMS ---
-st.set_page_config(page_title="Dwelza Ecosystem v4.0", page_icon="🏢", layout="wide")
+st.set_page_config(page_title="Dwelza Ecosystem v4.5", page_icon="🏢", layout="wide")
 
+# Dark-Mode Safe High-Contrast CSS Shims
 st.markdown("""
     <style>
     #MainMenu {visibility: hidden;} header {visibility: hidden;} footer {visibility: hidden;}
     .main-title { font-size: 44px; font-weight: 800; color: #FF5A5F; text-align: center; margin-bottom: 2px; }
-    .sub-title { font-size: 16px; color: #666666; text-align: center; margin-bottom: 30px; letter-spacing: 1px; }
+    .sub-title { font-size: 16px; color: #aaaaaa; text-align: center; margin-bottom: 30px; letter-spacing: 1px; }
     
-    /* Anti-Spam UX / UI Elements */
-    .card { padding: 25px; border-radius: 14px; background-color: #ffffff; box-shadow: 0px 8px 24px rgba(0,0,0,0.04); margin-bottom: 25px; border: 1px solid #f0f2f6; }
+    /* Dark-mode ready UI Containers */
+    .card { padding: 25px; border-radius: 14px; background-color: #1e293b; box-shadow: 0px 8px 24px rgba(0,0,0,0.2); margin-bottom: 25px; border: 1px solid #334155; color: #f8fafc; }
+    .card h3 { color: #ffffff !important; margin-top: 5px; }
+    
+    /* Badges */
     .verified-badge { background-color: #00C851; color: white; padding: 4px 12px; border-radius: 50px; font-size: 11px; font-weight: bold; text-transform: uppercase; margin-bottom: 12px; display: inline-block; }
-    .unverified-badge { background-color: #ffbb33; color: white; padding: 4px 12px; border-radius: 50px; font-size: 11px; font-weight: bold; text-transform: uppercase; margin-bottom: 12px; display: inline-block; }
+    .unverified-badge { background-color: #ffbb33; color: #1e293b; padding: 4px 12px; border-radius: 50px; font-size: 11px; font-weight: bold; text-transform: uppercase; margin-bottom: 12px; display: inline-block; }
     .stale-badge { background-color: #ff3547; color: white; padding: 4px 12px; border-radius: 50px; font-size: 11px; font-weight: bold; text-transform: uppercase; margin-bottom: 12px; display: inline-block; }
     
-    /* Escrow Safe & Pricing Indicators */
-    .dwelzestimate-box { background-color: #F0F4F9; padding: 18px; border-radius: 10px; border-left: 6px solid #007bff; margin-top: 15px; }
-    .escrow-warning { background-color: #FFF3CD; border-left: 6px solid #FFC107; padding: 12px; border-radius: 6px; margin-top: 10px; color: #856404; font-size: 13px; font-weight: 500; }
+    /* High-contrast valuation text inside containers */
+    .dwelzestimate-box { background-color: #0f172a; padding: 18px; border-radius: 10px; border-left: 6px solid #38bdf8; margin-top: 15px; color: #e2e8f0; border-top: 1px solid #334155; border-right: 1px solid #334155; border-bottom: 1px solid #334155; }
+    .dwelzestimate-box strong { color: #38bdf8 !important; }
+    .escrow-warning { background-color: #78350f; border-left: 6px solid #f59e0b; padding: 12px; border-radius: 6px; margin-top: 10px; color: #fef3c7; font-size: 13px; font-weight: 500; }
     
-    /* Privacy-Safe CTA Buttons */
+    /* CTA buttons */
     .wa-button { background-color: #25D366; color: white !important; padding: 10px 20px; border-radius: 8px; text-decoration: none; display: inline-block; font-weight: bold; margin-top: 10px; font-size: 14px; text-align: center; box-shadow: 0px 4px 10px rgba(37,211,102,0.2); }
-    .auth-banner { background-color: #3F51B5; color: white; padding: 10px; border-radius: 8px; text-align: center; margin-bottom: 20px; font-weight: 600; }
+    .auth-banner { background-color: #3b82f6; color: white; padding: 12px; border-radius: 8px; text-align: center; margin-bottom: 20px; font-weight: 600; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -36,7 +41,6 @@ st.markdown("""
 EXCEL_FILE = "source data.xlsx"
 
 def initialize_database():
-    """Initializes and builds the baseline schema variables natively inside the Excel workbook."""
     active_now = datetime.now().strftime("%Y-%m-%d")
     stale_past = (datetime.now() - timedelta(days=45)).strftime("%Y-%m-%d")
     future_exp = (datetime.now() + timedelta(days=20)).strftime("%Y-%m-%d")
@@ -45,7 +49,7 @@ def initialize_database():
         "listing_id": [1001, 1002, 1003, 1004, 1005],
         "title": ["Premium 3 BHK Apartment", "Cozy 1 BHK for Bachelors", "Luxury Smart Villa", "Modern Flat near IT Corridor", "Stale Unverified Listing Example"],
         "locality": ["Indiranagar, Bangalore", "Andheri West, Mumbai", "DLF Phase 3, Gurgaon", "OMR Sholinganallur, Chennai", "Kakkanad, Kochi"],
-        "price_inr": [18500000, 4500000, 52000000, 8500000, 3200000], # 1005 holds artificially deflated bait pricing
+        "price_inr": [18500000, 4500000, 52000000, 8500000, 3200000],
         "size_sqft": [1800, 650, 4200, 1450, 1600],
         "lat": [12.97189, 19.11967, 28.4908, 12.9010, 10.0159],
         "lon": [77.64115, 72.84642, 77.0894, 80.2279, 76.3419],
@@ -56,7 +60,7 @@ def initialize_database():
         "near_metro": [True, True, False, False, True],
         "owner_name": ["Rajesh Kumar", "Amit Sharma", "Vikram Malhotra", "Suresh Kumar", "Unknown Broker Hub"],
         "owner_phone": ["9876543210", "9123456789", "9988776655", "9444012345", "9846056789"],
-        "reports_count": [0, 0, 0, 0, 4], # 1005 is auto-flagged via crowdsource metrics
+        "reports_count": [0, 0, 0, 0, 4],
         "created_date": [active_now, active_now, active_now, active_now, stale_past],
         "expiry_date": [future_exp, future_exp, future_exp, future_exp, active_now],
         "status": ["Active", "Active", "Active", "Active", "Stale"]
@@ -88,7 +92,6 @@ initialize_database()
 def load_data(sheet_name):
     try:
         df = pd.read_excel(EXCEL_FILE, sheet_name=sheet_name)
-        # Structural Sanity Check: Handle baseline missing column injections gracefully
         if sheet_name == "Listings":
             if "status" not in df.columns: df["status"] = "Active"
             if "reports_count" not in df.columns: df["reports_count"] = 0
@@ -105,12 +108,10 @@ def save_data(df, sheet_name):
 df_listings = load_data("Listings")
 df_historical = load_data("HistoricalSales")
 
-# --- AUTO-MAINTENANCE PIPELINE: SUPPRESS STALE DATA & FRAUD ON BOOT ---
+# --- AUTO-MAINTENANCE PIPELINE ---
 if not df_listings.empty:
     today_str = datetime.now().strftime("%Y-%m-%d")
-    # Rule 1: Flag structural expiry dates
     df_listings.loc[df_listings['expiry_date'].astype(str) < today_str, 'status'] = 'Stale'
-    # Rule 2: Flag crowdsourced report thresholds (Anti Bait-and-Switch)
     df_listings.loc[df_listings['reports_count'] >= 3, 'status'] = 'Under Investigation'
     save_data(df_listings, "Listings")
 
@@ -143,35 +144,38 @@ def format_indian_currency(num):
 st.markdown("<div class='main-title'>DWELZA ADVANCED PORTAL</div>", unsafe_allow_html=True)
 st.markdown("<div class='sub-title'>Zero-Spam, Anti-Fraud Premium Property Ecosystem</div>", unsafe_allow_html=True)
 
-# --- SIDEBAR ROLE CONTROLLER ---
-st.sidebar.title("🔐 Anti-Paywall Access Terminal")
+# --- SIDEBAR ROLE CONTROLLER & IDENTITY OPTIONS PANEL ---
+st.sidebar.title("🔐 Access Control Desk")
+
+# Visible validation options configuration setup
 if st.session_state["user_role"] == "Guest":
-    with st.sidebar.form("login_form"):
-        user_input = st.text_input("Username Identifier", value="Premium_Buyer_Alpha")
-        role_selection = st.selectbox("Assign Verified Track", ["Verified Buyer", "Verified Builder / Owner"])
-        submit_auth = st.form_submit_button("Unlock Premium Features Free")
+    st.sidebar.warning("🔒 Features are masked for unauthenticated Guests.")
+    with st.sidebar.form("identity_verification_form"):
+        user_input = st.text_input("Choose Username Handle", value="Premium_Buyer_Alpha")
+        role_selection = st.selectbox("Assign System Track Profile", ["Verified Buyer", "Verified Builder / Owner"])
+        submit_auth = st.form_submit_button("Verify Identity Now")
         if submit_auth and user_input:
             st.session_state["user_role"] = role_selection
             st.session_state["username"] = user_input
             st.rerun()
 else:
-    st.sidebar.markdown(f"<div class='auth-banner'>Session Identity: {st.session_state['username']}<br>Validation Token: {st.session_state['user_role']}</div>", unsafe_allow_html=True)
-    if st.sidebar.button("Terminated Encrypted Session"):
+    st.sidebar.markdown(f"<div class='auth-banner'>Active: {st.session_state['username']}<br>Level: {st.session_state['user_role']}</div>", unsafe_allow_html=True)
+    if st.sidebar.button("Log Out / Reset Session"):
         st.session_state["user_role"] = "Guest"
         st.session_state["username"] = ""
         st.rerun()
 
 menu = st.sidebar.selectbox("Marketplace Control Center", ["🔍 Open Marketplace Feed", "📊 Real-Time Pricing Index", "🏗️ Owner Verification Panel"])
 
-# --- MODULE 1: EXPLORE WORKSPACE (ANTI-FRAUD ARCHITECTURE) ---
+# --- MODULE 1: EXPLORE WORKSPACE ---
 if menu == "🔍 Open Marketplace Feed":
-    st.subheader("Explore Active Verified Assets (No Mandatory Paywalls)")
+    st.subheader("Explore Active Verified Assets")
     
     col_f1, col_f2 = st.columns(2)
     with col_f1:
-        search_kw = st.text_input("Search Locality or City (e.g. OMR Chennai, Bangalore)", "")
+        search_kw = st.text_input("Filter Locality Matrix (e.g. Mumbai, Chennai, Bangalore)", "")
     with col_f2:
-        status_filter = st.radio("Asset Activity Mode", ["Active Only (Fresh Data)", "Show Stale / Suspended Listings"], horizontal=True)
+        status_filter = st.radio("Asset Activity Filter Mode", ["Active Only (Fresh Data)", "Show Stale / Suspended Listings"], horizontal=True)
 
     if not df_listings.empty:
         filtered = df_listings.copy()
@@ -185,15 +189,11 @@ if menu == "🔍 Open Marketplace Feed":
             filtered = filtered[filtered['locality'].str.contains(search_kw, case=False, na=False)]
             
         if not filtered.empty:
-            if 'lat' in filtered.columns:
-                st.map(filtered[['lat', 'lon']])
-                
             for idx, row in filtered.iterrows():
                 st.markdown("<div class='card'>", unsafe_allow_html=True)
                 l_col, r_col = st.columns([2, 1])
                 
                 with l_col:
-                    # RERA Verification Flag
                     if row.get('is_verified', False):
                         st.markdown(f"<span class='verified-badge'>✓ Legally RERA Bound — ID: {row.get('rera_number')}</span>", unsafe_allow_html=True)
                     elif row.get('status') == 'Stale':
@@ -204,16 +204,14 @@ if menu == "🔍 Open Marketplace Feed":
                     st.markdown(f"<h3>{row.get('title', 'Property Asset')}</h3>", unsafe_allow_html=True)
                     st.write(f"📍 Locality Core: **{row.get('locality')}** | 📐 net usable area: **{row.get('size_sqft')}** Sq.Ft.")
                     
-                    # Calculate Dwelzestimate Bounds to isolate Bait-and-Switch Pricing
                     low, high = calculate_dwelzestimate(row.get('size_sqft', 0), row.get('locality', ''), row.get('near_metro', False), df_historical)
                     st.markdown(f"""
                     <div class='dwelzestimate-box'>
                         <strong>💡 Dwelzestimate Algorithmic Valuation Boundary:</strong> {format_indian_currency(low)} - {format_indian_currency(high)}<br>
-                        <small>Calculated using strict infrastructural spatial indices to evaluate potential listing fraud patterns.</small>
+                        <small style='color: #94a3b8;'>Calculated using strict infrastructural spatial indices to evaluate potential listing fraud patterns.</small>
                     </div>
                     """, unsafe_allow_html=True)
                     
-                    # Anti-Token Money Scam Warning Engine
                     if row.get('price_inr', 0) < low * 0.85:
                         st.markdown(f"""
                         <div class='escrow-warning'>
@@ -223,13 +221,12 @@ if menu == "🔍 Open Marketplace Feed":
                         """, unsafe_allow_html=True)
                         
                 with r_col:
-                    st.subheader(format_indian_currency(row.get('price_inr', 0)))
+                    st.markdown(f"<h2 style='color: #ffffff; margin-bottom: 5px;'>{format_indian_currency(row.get('price_inr', 0))}</h2>", unsafe_allow_html=True)
                     
-                    # Anti-Spam Zero Leak Architecture Logic
                     if st.session_state["user_role"] == "Guest":
-                        st.info("🔒 Identity validation required to initialize privacy tunnel.")
+                        st.info("🔒 Use the 'Access Control Desk' form on the sidebar to check verified owner identities.")
                     else:
-                        mask_id = f"mask_v4_{row.get('listing_id', idx)}"
+                        mask_id = f"mask_v45_{row.get('listing_id', idx)}"
                         if mask_id not in st.session_state: st.session_state[mask_id] = True
                         
                         if st.session_state[mask_id]:
@@ -238,10 +235,8 @@ if menu == "🔍 Open Marketplace Feed":
                                 st.rerun()
                         else:
                             st.success(f"👤 Owner ID: {row.get('owner_name')}")
-                            # Prevent scrapers from parsing text lines via generation layout shims
                             st.code(f"Mobile Sequence: +91 {row.get('owner_phone')}", language="text")
                             
-                            # Construct direct WhatsApp message routing parameters
                             msg_raw = f"Hello {row.get('owner_name')}, I am requesting a structural walkthrough regarding '{row.get('title')}' on Dwelza."
                             msg_enc = urllib.parse.quote(msg_raw)
                             st.markdown(f'<a href="https://wa.me/91{row.get("owner_phone")}?text={msg_enc}" target="_blank" class="wa-button">💬 Launch Direct WhatsApp Link</a>', unsafe_allow_html=True)
@@ -260,7 +255,6 @@ if menu == "🔍 Open Marketplace Feed":
 # --- MODULE 2: TRANSPARENT REGIONAL PRICING DATA INDEX ---
 elif menu == "📊 Real-Time Pricing Index":
     st.subheader("Transparent Localized Pricing Analytics Dashboard")
-    st.write("Dwelza strips out internal marketing paywalls. Use this tracking data to cross-check true builder market conditions.")
     
     if not df_historical.empty:
         c1, c2 = st.columns(2)
@@ -270,15 +264,13 @@ elif menu == "📊 Real-Time Pricing Index":
         with c2:
             st.markdown("#### Comparative Distribution Vectors")
             st.plotly_chart(px.pie(df_historical, names="locality", values="avg_price_per_sqft", hole=0.3), use_container_width=True)
-    else:
-        st.error("Historical ledger array empty.")
 
 # --- MODULE 3: DIRECT OWNER MANAGEMENT HUB ---
 elif menu == "🏗️ Owner Verification Panel":
     st.subheader("List Verified Real Estate Asset")
     
     if st.session_state["user_role"] != "Verified Builder / Owner":
-        st.error("🚨 Access Restricted. You must shift your profile authorization track to 'Verified Builder / Owner' inside the security portal to update the dynamic Excel files.")
+        st.error("🚨 Access Restricted. You must shift your profile authorization track to 'Verified Builder / Owner' inside the sidebar form first.")
     else:
         with st.form("secure_asset_publisher"):
             t = st.text_input("Asset Heading Title (e.g. Luxury 2BHK Smart Penthouse)")
@@ -293,7 +285,7 @@ elif menu == "🏗️ Owner Verification Panel":
             if submit and t and l and o_p:
                 n_id = int(df_listings['listing_id'].max() + 1 if not df_listings.empty else 1001)
                 created_dt = datetime.now().strftime("%Y-%m-%d")
-                exp_dt = (datetime.now() + timedelta(days=30)).strftime("%Y-%m-%d") # Absolute 30-Day TTL enforce loop
+                exp_dt = (datetime.now() + timedelta(days=30)).strftime("%Y-%m-%d")
                 
                 new_row = {
                     "listing_id": n_id, "title": t, "locality": l, "price_inr": p, "size_sqft": s,
@@ -305,5 +297,5 @@ elif menu == "🏗️ Owner Verification Panel":
                 
                 updated_df = pd.concat([df_listings, pd.DataFrame([new_row])], ignore_index=True)
                 save_data(updated_df, "Listings")
-                st.success("Asset initialized successfully! Expiry deadline sequence tracked automatically for 30 days.")
+                st.success("Asset initialized successfully!")
                 st.rerun()
