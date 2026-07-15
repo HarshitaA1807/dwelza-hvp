@@ -5,9 +5,10 @@ import numpy as np
 import os
 import urllib.parse
 import plotly.express as px
+import plotly.graph_objects as go
 from datetime import datetime, timedelta
 
-# --- SYSTEM SETTINGS ---
+# --- SYSTEM CONFIGURATION ---
 st.set_page_config(
     page_title="Dwelza Advanced Valuation Platform", 
     page_icon="🏠", 
@@ -22,7 +23,6 @@ def initialize_database():
     stale_past = (datetime.now() - timedelta(days=45)).strftime("%Y-%m-%d")
     future_exp = (datetime.now() + timedelta(days=20)).strftime("%Y-%m-%d")
     
-    # Ensured all arrays are explicitly identical in dimension length to avoid ValueError rules
     default_listings = {
         "listing_id": [1001, 1002, 1003, 1004, 1005],
         "title": ["Premium 3 BHK Apartment", "Cozy 1 BHK for Bachelors", "Luxury Smart Villa", "Modern Flat near IT Corridor", "Stale Unverified Listing Example"],
@@ -109,21 +109,20 @@ def format_indian_currency(num):
 # --- IDENTITY ACCESS INTERFACE ---
 st.sidebar.title("🛂 Identity Verification Desk")
 
-# Verification component block remains highly visible at all execution times
 with st.sidebar.container(border=True):
     if st.session_state["user_role"] == "Guest":
-        st.info("👤 Current Tracking Session: Guest Profile Mode")
-        u_input = st.text_input("Profile Display User Name", value="Investor_Alpha")
+        st.info("👤 Session Track: Guest Profile Mode")
+        u_input = st.text_input("Profile User Name", value="Investor_Alpha")
         r_input = st.selectbox("Authorization Track", ["Verified Buyer", "Verified Builder / Owner"])
-        if st.button("Complete Verification Registration", use_container_width=True):
+        if st.button("Complete Verification", use_container_width=True):
             if u_input:
                 st.session_state["username"] = u_input
                 st.session_state["user_role"] = r_input
                 st.rerun()
     else:
         st.success(f"🔒 Account Logged: {st.session_state['username']}")
-        st.caption(f"Access Privileges: {st.session_state['user_role']}")
-        if st.button("Clear Authorization Tracking (Logout)", use_container_width=True):
+        st.caption(f"Clearance: {st.session_state['user_role']}")
+        if st.button("Logout Session", use_container_width=True):
             st.session_state["user_role"] = "Guest"
             st.session_state["username"] = ""
             st.rerun()
@@ -159,7 +158,7 @@ if menu_selection == "🔍 Property Marketplace":
                     st.info(f"💡 **AI Predictive Fair Boundary Baseline:** {format_indian_currency(low_v)} - {format_indian_currency(high_v)}")
                 with c_btn:
                     if st.session_state["user_role"] == "Guest":
-                        st.warning("🔒 Verification profile challenge needed to reveal links.")
+                        st.warning("🔒 Verification required to unlock contact channels.")
                     else:
                         st.write(f"👤 Representative: **{row['owner_name']}**")
                         text_msg = f"Hello {row['owner_name']}, looking to inspect '{row['title']}'."
@@ -190,11 +189,40 @@ elif menu_selection == "💡 AI Value Predictor Engine":
     final_high = int(high_bound * tier_multiplier)
     median_avg = int((final_low + final_high) / 2)
     
-    st.markdown("### Estimation Output Metrics")
-    m_col1, m_col2, m_col3 = st.columns(3)
-    m_col1.metric("Conservative Floor Estimate", format_indian_currency(final_low))
-    m_col2.metric("Target Median Valuation Value", format_indian_currency(median_avg), delta=f"{int((tier_multiplier-1)*100)}% Quality Weight Adjustment")
-    m_col3.metric("Aggressive Ceiling Limit", format_indian_currency(final_high))
+    st.markdown("### Valuation Breakdown Matrix")
+    
+    # Innovative Metric Scorecard Block
+    with st.container(border=True):
+        m_col1, m_col2, m_col3 = st.columns(3)
+        m_col1.metric("Conservative Floor Estimate", format_indian_currency(final_low))
+        m_col2.metric("Target Median Valuation Value", format_indian_currency(median_avg), delta=f"{int((tier_multiplier-1)*100)}% Quality Premium Applied")
+        m_col3.metric("Aggressive Ceiling Limit", format_indian_currency(final_high))
+        
+    # Innovative Predictive Variance Gauge Graphic Layout
+    st.markdown("### Valuation Spread Vector Visualization")
+    fig_gauge = go.Figure(go.Indicator(
+        mode = "gauge+number+delta",
+        value = median_avg,
+        domain = {'x': [0, 1], 'y': [0, 1]},
+        title = {'text': f"Predicted Target Valuation for {selected_loc}", 'font': {'size': 20}},
+        delta = {'reference': low_bound, 'increasing': {'color': "LightSeaGreen"}},
+        gauge = {
+            'axis': {'range': [None, final_high * 1.2], 'tickformat': ',r'},
+            'bar': {'color': "#38bdf8"},
+            'bgcolor': "rgba(0,0,0,0)",
+            'threshold': {
+                'line': {'color': "red", 'width': 4},
+                'thickness': 0.75,
+                'value': final_high
+            },
+            'steps': [
+                {'range': [0, final_low], 'color': 'rgba(255, 255, 255, 0.1)'},
+                {'range': [final_low, final_high], 'color': 'rgba(56, 189, 248, 0.2)'}
+            ]
+        }
+    ))
+    fig_gauge.update_layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font={'color': "#ffffff" if st.get_option("theme.base") == "dark" else "#000000"})
+    st.plotly_chart(fig_gauge, use_container_width=True)
 
 # --- MODULE 3: MARKET TRENDS ---
 elif menu_selection == "📊 Market Trends Index":
@@ -216,7 +244,7 @@ elif menu_selection == "🏗️ Owner Management Dashboard":
     st.title("🏗️ Portfolio Control Desk")
     st.markdown("---")
     if st.session_state["user_role"] != "Verified Builder / Owner":
-        st.error("🚨 Track Access Prohibited. Shift your active state tracking profile to 'Verified Builder / Owner' inside the sidebar verification console widget to open this screen.")
+        st.error("🚨 Track Access Prohibited. Shift your active profile track settings to 'Verified Builder / Owner' inside the sidebar verification desk widget to open this deployment window.")
     else:
         with st.form("new_listing_asset"):
             st.subheader("Broadcast New Verified Asset Inventory Record")
