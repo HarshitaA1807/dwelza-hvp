@@ -8,18 +8,26 @@ import plotly.express as px
 from datetime import datetime, timedelta
 
 # --- PRE-LOAD INTERACTIVE CONFIGURATION & CUSTOM DESIGN SHIMS ---
-st.set_page_config(page_title="Dwelza Ecosystem v3.0", page_icon="🏢", layout="wide")
+st.set_page_config(page_title="Dwelza Ecosystem v4.0", page_icon="🏢", layout="wide")
 
 st.markdown("""
     <style>
     #MainMenu {visibility: hidden;} header {visibility: hidden;} footer {visibility: hidden;}
     .main-title { font-size: 44px; font-weight: 800; color: #FF5A5F; text-align: center; margin-bottom: 2px; }
     .sub-title { font-size: 16px; color: #666666; text-align: center; margin-bottom: 30px; letter-spacing: 1px; }
+    
+    /* Anti-Spam UX / UI Elements */
     .card { padding: 25px; border-radius: 14px; background-color: #ffffff; box-shadow: 0px 8px 24px rgba(0,0,0,0.04); margin-bottom: 25px; border: 1px solid #f0f2f6; }
     .verified-badge { background-color: #00C851; color: white; padding: 4px 12px; border-radius: 50px; font-size: 11px; font-weight: bold; text-transform: uppercase; margin-bottom: 12px; display: inline-block; }
     .unverified-badge { background-color: #ffbb33; color: white; padding: 4px 12px; border-radius: 50px; font-size: 11px; font-weight: bold; text-transform: uppercase; margin-bottom: 12px; display: inline-block; }
+    .stale-badge { background-color: #ff3547; color: white; padding: 4px 12px; border-radius: 50px; font-size: 11px; font-weight: bold; text-transform: uppercase; margin-bottom: 12px; display: inline-block; }
+    
+    /* Escrow Safe & Pricing Indicators */
     .dwelzestimate-box { background-color: #F0F4F9; padding: 18px; border-radius: 10px; border-left: 6px solid #007bff; margin-top: 15px; }
-    .wa-button { background-color: #25D366; color: white !important; padding: 10px 20px; border-radius: 8px; text-decoration: none; display: inline-block; font-weight: bold; margin-top: 10px; font-size: 14px; box-shadow: 0px 4px 10px rgba(37,211,102,0.2); }
+    .escrow-warning { background-color: #FFF3CD; border-left: 6px solid #FFC107; padding: 12px; border-radius: 6px; margin-top: 10px; color: #856404; font-size: 13px; font-weight: 500; }
+    
+    /* Privacy-Safe CTA Buttons */
+    .wa-button { background-color: #25D366; color: white !important; padding: 10px 20px; border-radius: 8px; text-decoration: none; display: inline-block; font-weight: bold; margin-top: 10px; font-size: 14px; text-align: center; box-shadow: 0px 4px 10px rgba(37,211,102,0.2); }
     .auth-banner { background-color: #3F51B5; color: white; padding: 10px; border-radius: 8px; text-align: center; margin-bottom: 20px; font-weight: 600; }
     </style>
 """, unsafe_allow_html=True)
@@ -28,26 +36,32 @@ st.markdown("""
 EXCEL_FILE = "source data.xlsx"
 
 def initialize_database():
-    exp_str = (datetime.now() + timedelta(days=30)).strftime("%Y-%m-%d")
+    """Initializes and builds the baseline schema variables natively inside the Excel workbook."""
+    active_now = datetime.now().strftime("%Y-%m-%d")
+    stale_past = (datetime.now() - timedelta(days=45)).strftime("%Y-%m-%d")
+    future_exp = (datetime.now() + timedelta(days=20)).strftime("%Y-%m-%d")
+    
     default_listings = {
         "listing_id": [1001, 1002, 1003, 1004, 1005],
-        "title": ["Premium 3 BHK Apartment", "Cozy 1 BHK for Bachelors", "Luxury Smart Villa", "Modern Flat near IT Corridor", "Beachside Sea-view Apartment"],
+        "title": ["Premium 3 BHK Apartment", "Cozy 1 BHK for Bachelors", "Luxury Smart Villa", "Modern Flat near IT Corridor", "Stale Unverified Listing Example"],
         "locality": ["Indiranagar, Bangalore", "Andheri West, Mumbai", "DLF Phase 3, Gurgaon", "OMR Sholinganallur, Chennai", "Kakkanad, Kochi"],
-        "price_inr": [18500000, 4500000, 52000000, 8500000, 12000000],
+        "price_inr": [18500000, 4500000, 52000000, 8500000, 3200000], # 1005 holds artificially deflated bait pricing
         "size_sqft": [1800, 650, 4200, 1450, 1600],
         "lat": [12.97189, 19.11967, 28.4908, 12.9010, 10.0159],
         "lon": [77.64115, 72.84642, 77.0894, 80.2279, 76.3419],
-        "rera_number": ["PRM/KA/RERA/1251/310/PR/180516/001", "", "HRERA/2022/89", "TN/29/Building/0122/2024", "K-RERA/PRJ/TVM/045/2023"],
-        "is_verified": [True, False, True, True, True],
+        "rera_number": ["PRM/KA/RERA/1251/310/PR/180516/001", "", "HRERA/2022/89", "TN/29/Building/0122/2024", ""],
+        "is_verified": [True, False, True, True, False],
         "veg_only": [False, True, False, False, False],
         "bachelors_allowed": [True, True, False, True, True],
         "near_metro": [True, True, False, False, True],
-        "owner_name": ["Rajesh Kumar", "Amit Sharma", "Vikram Malhotra", "Suresh Kumar", "Arun Kurian"],
+        "owner_name": ["Rajesh Kumar", "Amit Sharma", "Vikram Malhotra", "Suresh Kumar", "Unknown Broker Hub"],
         "owner_phone": ["9876543210", "9123456789", "9988776655", "9444012345", "9846056789"],
-        "reports_count": [0, 0, 0, 0, 0],
-        "expiry_date": [exp_str] * 5,
-        "status": ["Active"] * 5
+        "reports_count": [0, 0, 0, 0, 4], # 1005 is auto-flagged via crowdsource metrics
+        "created_date": [active_now, active_now, active_now, active_now, stale_past],
+        "expiry_date": [future_exp, future_exp, future_exp, future_exp, active_now],
+        "status": ["Active", "Active", "Active", "Active", "Stale"]
     }
+    
     default_historical = {
         "locality": ["Indiranagar, Bangalore", "Andheri West, Mumbai", "DLF Phase 3, Gurgaon", "OMR Sholinganallur, Chennai", "Adyar, Chennai", "Coimbatore Center", "Kakkanad, Kochi", "Thiruvananthapuram City"],
         "avg_price_per_sqft": [9500, 18000, 11500, 6200, 13500, 5500, 5800, 5200]
@@ -58,7 +72,6 @@ def initialize_database():
             pd.DataFrame(default_listings).to_excel(writer, sheet_name="Listings", index=False)
             pd.DataFrame(default_historical).to_excel(writer, sheet_name="HistoricalSales", index=False)
     else:
-        # If file exists but sheets are missing or structured incorrectly, let's fix them safely
         try:
             xl = pd.ExcelFile(EXCEL_FILE)
             if "Listings" not in xl.sheet_names or "HistoricalSales" not in xl.sheet_names:
@@ -75,9 +88,11 @@ initialize_database()
 def load_data(sheet_name):
     try:
         df = pd.read_excel(EXCEL_FILE, sheet_name=sheet_name)
-        # Safe Fallback: If 'status' column is completely missing from user manual Excel modification
-        if sheet_name == "Listings" and "status" not in df.columns:
-            df["status"] = "Active"
+        # Structural Sanity Check: Handle baseline missing column injections gracefully
+        if sheet_name == "Listings":
+            if "status" not in df.columns: df["status"] = "Active"
+            if "reports_count" not in df.columns: df["reports_count"] = 0
+            if "expiry_date" not in df.columns: df["expiry_date"] = (datetime.now() + timedelta(days=20)).strftime("%Y-%m-%d")
         return df
     except:
         return pd.DataFrame()
@@ -90,13 +105,18 @@ def save_data(df, sheet_name):
 df_listings = load_data("Listings")
 df_historical = load_data("HistoricalSales")
 
-# --- INITIALIZE REGIONAL SECURE AUTHENTICATION STATE VARIABLES ---
-if "user_role" not in st.session_state:
-    st.session_state["user_role"] = "Guest"
-if "username" not in st.session_state:
-    st.session_state["username"] = ""
-if "messages" not in st.session_state:
-    st.session_state["messages"] = [{"role": "assistant", "content": "👋 Namaste! I am the Dwelza AI Valuation assistant. Ask me to compare properties or check typical prices!"}]
+# --- AUTO-MAINTENANCE PIPELINE: SUPPRESS STALE DATA & FRAUD ON BOOT ---
+if not df_listings.empty:
+    today_str = datetime.now().strftime("%Y-%m-%d")
+    # Rule 1: Flag structural expiry dates
+    df_listings.loc[df_listings['expiry_date'].astype(str) < today_str, 'status'] = 'Stale'
+    # Rule 2: Flag crowdsourced report thresholds (Anti Bait-and-Switch)
+    df_listings.loc[df_listings['reports_count'] >= 3, 'status'] = 'Under Investigation'
+    save_data(df_listings, "Listings")
+
+# --- INITIALIZE STATE ARCHITECTURES ---
+if "user_role" not in st.session_state: st.session_state["user_role"] = "Guest"
+if "username" not in st.session_state: st.session_state["username"] = ""
 
 def calculate_dwelzestimate(size_sqft, locality, near_metro, historical_df):
     locality_lower = str(locality).lower()
@@ -108,7 +128,6 @@ def calculate_dwelzestimate(size_sqft, locality, near_metro, historical_df):
         if "mumbai" in locality_lower: base_rate = 18000
         elif "bangalore" in locality_lower: base_rate = 9500
         elif "chennai" in locality_lower: base_rate = 6500
-        elif "kochi" in locality_lower: base_rate = 5800
         else: base_rate = 6000
     base_value = size_sqft * base_rate
     mult = 1.06 + (0.12 if near_metro else 0.0)
@@ -121,180 +140,170 @@ def format_indian_currency(num):
     return f"₹{num:,}"
 
 # --- APP LAYOUT BRANDING HEADER ---
-st.markdown("<div class='main-title'>DWELZA PRO PLATFORM</div>", unsafe_allow_html=True)
-st.markdown("<div class='sub-title'>Enterprise Grade Authenticated Real Estate Engine</div>", unsafe_allow_html=True)
+st.markdown("<div class='main-title'>DWELZA ADVANCED PORTAL</div>", unsafe_allow_html=True)
+st.markdown("<div class='sub-title'>Zero-Spam, Anti-Fraud Premium Property Ecosystem</div>", unsafe_allow_html=True)
 
-# --- SIDEBAR ROLE SEGREGATION MANAGER ---
-st.sidebar.title("🔐 Authentication Gate")
+# --- SIDEBAR ROLE CONTROLLER ---
+st.sidebar.title("🔐 Anti-Paywall Access Terminal")
 if st.session_state["user_role"] == "Guest":
     with st.sidebar.form("login_form"):
-        user_input = st.text_input("Enter Username", value="Rajesh_Builder")
-        password_input = st.text_input("Enter Secret Password", type="password", value="dwelza123")
-        role_selection = st.selectbox("Assign System Role", ["Verified Builder / Owner", "Verified Buyer"])
-        submit_auth = st.form_submit_button("Authenticate Sign In")
-        
-        if submit_auth:
-            if password_input == "dwelza123" and user_input:
-                st.session_state["user_role"] = role_selection
-                st.session_state["username"] = user_input
-                st.sidebar.success(f"Log In Complete: {user_input}")
-                st.rerun()
-            else:
-                st.sidebar.error("Invalid credentials placeholder configuration.")
+        user_input = st.text_input("Username Identifier", value="Premium_Buyer_Alpha")
+        role_selection = st.selectbox("Assign Verified Track", ["Verified Buyer", "Verified Builder / Owner"])
+        submit_auth = st.form_submit_button("Unlock Premium Features Free")
+        if submit_auth and user_input:
+            st.session_state["user_role"] = role_selection
+            st.session_state["username"] = user_input
+            st.rerun()
 else:
-    st.sidebar.markdown(f"<div class='auth-banner'>User: {st.session_state['username']}<br>Role: {st.session_state['user_role']}</div>", unsafe_allow_html=True)
-    if st.sidebar.button("Log Out of Session"):
+    st.sidebar.markdown(f"<div class='auth-banner'>Session Identity: {st.session_state['username']}<br>Validation Token: {st.session_state['user_role']}</div>", unsafe_allow_html=True)
+    if st.sidebar.button("Terminated Encrypted Session"):
         st.session_state["user_role"] = "Guest"
         st.session_state["username"] = ""
         st.rerun()
 
-menu = st.sidebar.selectbox("Marketplace Control Center", ["🔍 Verified Listings Workspace", "🤖 Conversational AI Valuation Assistant", "📊 Strategic Analytics Platform", "🏗️ Direct Property Publisher Panel"])
+menu = st.sidebar.selectbox("Marketplace Control Center", ["🔍 Open Marketplace Feed", "📊 Real-Time Pricing Index", "🏗️ Owner Verification Panel"])
 
-# --- MODULE 1: INTERACTIVE EXPLORE SUITE ---
-if menu == "🔍 Verified Listings Workspace":
-    st.subheader("Interactive Global Matrix Feeds")
+# --- MODULE 1: EXPLORE WORKSPACE (ANTI-FRAUD ARCHITECTURE) ---
+if menu == "🔍 Open Marketplace Feed":
+    st.subheader("Explore Active Verified Assets (No Mandatory Paywalls)")
     
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        search_loc = st.text_input("Filter Locality Keywords", value="")
-    with col2:
-        max_budget = st.slider("Absolute Top Budget (INR)", 1000000, 100000000, 85000000, 500000)
-    with col3:
-        sort_by = st.selectbox("Sort Order Execution", ["Price: Low to High", "Price: High to Low"])
-        
+    col_f1, col_f2 = st.columns(2)
+    with col_f1:
+        search_kw = st.text_input("Search Locality or City (e.g. OMR Chennai, Bangalore)", "")
+    with col_f2:
+        status_filter = st.radio("Asset Activity Mode", ["Active Only (Fresh Data)", "Show Stale / Suspended Listings"], horizontal=True)
+
     if not df_listings.empty:
         filtered = df_listings.copy()
-        # Safe column query verification
-        if 'status' in filtered.columns:
-            filtered = filtered[filtered['status'] == 'Active']
-            
-        if search_loc and 'locality' in filtered.columns:
-            filtered = filtered[filtered['locality'].str.contains(search_loc, case=False, na=False)]
-            
-        if 'price_inr' in filtered.columns:
-            filtered = filtered[filtered['price_inr'] <= max_budget]
-            if sort_by == "Price: Low to High": 
-                filtered = filtered.sort_values(by="price_inr", ascending=True)
-            else: 
-                filtered = filtered.sort_values(by="price_inr", ascending=False)
-    else:
-        filtered = pd.DataFrame()
-
-    if not filtered.empty:
-        if 'lat' in filtered.columns and 'lon' in filtered.columns:
-            st.map(filtered[['lat', 'lon']])
         
-        for idx, row in filtered.iterrows():
-            st.markdown("<div class='card'>", unsafe_allow_html=True)
-            l_col, r_col = st.columns([2, 1])
-            
-            with l_col:
-                if row.get('is_verified', False):
-                    st.markdown(f"<span class='verified-badge'>✓ RERA VERIFIED — ID: {row.get('rera_number')}</span>", unsafe_allow_html=True)
-                else:
-                    st.markdown("<span class='unverified-badge'>⚠️ UNVERIFIED DEPOSIT AT RISK</span>", unsafe_allow_html=True)
-                    
-                st.markdown(f"<h3>{row.get('title', 'Property Listing')}</h3>", unsafe_allow_html=True)
-                st.write(f"📍 **Locality Asset:** {row.get('locality', 'N/A')} | 📐 **Net Usable Area:** {row.get('size_sqft', 0)} Sq.Ft.")
-                
-                low, high = calculate_dwelzestimate(row.get('size_sqft', 0), row.get('locality', ''), row.get('near_metro', False), df_historical)
-                st.markdown(f"""
-                <div class='dwelzestimate-box'>
-                    <strong>💡 Live Algorithmic Fair Value Vector:</strong> {format_indian_currency(low)} - {format_indian_currency(high)}<br>
-                    <small>Real-time telemetry metric computed using infrastructure proximity matrix array filters.</small>
-                </div>
-                """, unsafe_allow_html=True)
-                
-            with r_col:
-                st.subheader(format_indian_currency(row.get('price_inr', 0)))
-                
-                if st.session_state["user_role"] == "Guest":
-                    st.warning("🔒 Login requested to reveal verified context assets.")
-                else:
-                    mask_id = f"m_pro_{row.get('listing_id', idx)}"
-                    if mask_id not in st.session_state: st.session_state[mask_id] = True
-                    
-                    if st.session_state[mask_id]:
-                        if st.button("Decrypt Contact", key=f"dec_{row.get('listing_id', idx)}"):
-                            st.session_state[mask_id] = False
-                            st.rerun()
-                    else:
-                        st.success(f"👤 Contact: {row.get('owner_name', 'Owner')} ({row.get('owner_phone', 'N/A')})")
-                        msg_enc = urllib.parse.quote(f"Greetings {row.get('owner_name', 'Owner')}, I am looking into your verified item asset '{row.get('title', '')}' on Dwelza Pro Proximity network.")
-                        st.markdown(f'<a href="https://wa.me/91{row.get("owner_phone", "")}?text={msg_enc}" target="_blank" class="wa-button">💬 Route Secure WhatsApp Chat</a>', unsafe_allow_html=True)
-                        
-            st.markdown("</div>", unsafe_allow_html=True)
-    else:
-        st.info("Zero active system assets matched parameters.")
-
-# --- MODULE 2: CONVERSATIONAL AI VALUATION ASSISTANT ---
-elif menu == "🤖 Conversational AI Valuation Assistant":
-    st.subheader("Dwelza Cognitive Evaluation Chat Terminal")
-    st.write("Converse with our system agent directly to evaluate real-time regional trends from the dataset matrix hooks.")
-    
-    for message in st.session_state["messages"]:
-        with st.chat_message(message["role"]):
-            st.markdown(message["content"])
-            
-    if prompt := st.chat_input("Ask about Chennai pricing index or compare Indiranagar vs Kochi..."):
-        st.session_state["messages"].append({"role": "user", "content": prompt})
-        with st.chat_message("user"):
-            st.markdown(prompt)
-            
-        p_low = prompt.lower()
-        if "chennai" in p_low or "omr" in p_low:
-            ai_reply = f"Looking at current database records, Chennai OMR holds an average base rate of ₹6,200/Sq.Ft. For example, a 1,450 Sq.Ft property lists around {format_indian_currency(8500000)} which aligns exactly with fair matrix parameters."
-        elif "bangalore" in p_low or "indiranagar" in p_low:
-            ai_reply = "Bangalore prime indicators show heavy traction. Indiranagar historical charts evaluate to a premium baseline averaging ₹9,500 per Sq.Ft with an expected variance upward near metro links."
-        elif "kochi" in p_low or "kakkanad" in p_low:
-            ai_reply = "Kochi technical hubs like Kakkanad register stable price configurations tracking around ₹5,800/Sq.Ft, making it a highly scalable option for enterprise tech operators."
+        if status_filter == "Active Only (Fresh Data)":
+            filtered = filtered[filtered['status'] == 'Active']
         else:
-            ai_reply = "I scanned the dynamic ledger indices. The current active base configurations for properties evaluate between ₹5,500 and ₹18,000 per Sq.Ft across Tier-1 and Tier-2 sub-sectors depending on verified RERA status."
+            filtered = filtered[filtered['status'].isin(['Stale', 'Under Investigation'])]
             
-        st.session_state["messages"].append({"role": "assistant", "content": ai_reply})
-        with st.chat_message("assistant"):
-            st.markdown(ai_reply)
+        if search_kw:
+            filtered = filtered[filtered['locality'].str.contains(search_kw, case=False, na=False)]
+            
+        if not filtered.empty:
+            if 'lat' in filtered.columns:
+                st.map(filtered[['lat', 'lon']])
+                
+            for idx, row in filtered.iterrows():
+                st.markdown("<div class='card'>", unsafe_allow_html=True)
+                l_col, r_col = st.columns([2, 1])
+                
+                with l_col:
+                    # RERA Verification Flag
+                    if row.get('is_verified', False):
+                        st.markdown(f"<span class='verified-badge'>✓ Legally RERA Bound — ID: {row.get('rera_number')}</span>", unsafe_allow_html=True)
+                    elif row.get('status') == 'Stale':
+                        st.markdown("<span class='stale-badge'>⚠️ AUTOMATICALLY EXPIRED (DATA STALE)</span>", unsafe_allow_html=True)
+                    else:
+                        st.markdown("<span class='unverified-badge'>⚠️ CROWDSOURCED UNVERIFIED OWNER ENTRY</span>", unsafe_allow_html=True)
+                        
+                    st.markdown(f"<h3>{row.get('title', 'Property Asset')}</h3>", unsafe_allow_html=True)
+                    st.write(f"📍 Locality Core: **{row.get('locality')}** | 📐 net usable area: **{row.get('size_sqft')}** Sq.Ft.")
+                    
+                    # Calculate Dwelzestimate Bounds to isolate Bait-and-Switch Pricing
+                    low, high = calculate_dwelzestimate(row.get('size_sqft', 0), row.get('locality', ''), row.get('near_metro', False), df_historical)
+                    st.markdown(f"""
+                    <div class='dwelzestimate-box'>
+                        <strong>💡 Dwelzestimate Algorithmic Valuation Boundary:</strong> {format_indian_currency(low)} - {format_indian_currency(high)}<br>
+                        <small>Calculated using strict infrastructural spatial indices to evaluate potential listing fraud patterns.</small>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    
+                    # Anti-Token Money Scam Warning Engine
+                    if row.get('price_inr', 0) < low * 0.85:
+                        st.markdown(f"""
+                        <div class='escrow-warning'>
+                            🚨 <strong>CRITICAL RISK DETECTED:</strong> This listing price ({format_indian_currency(row.get('price_inr',0))}) is statistically aberrant compared to local indexes. 
+                            DO NOT transfer offline 'Token Money' deposits prior to site inspections!
+                        </div>
+                        """, unsafe_allow_html=True)
+                        
+                with r_col:
+                    st.subheader(format_indian_currency(row.get('price_inr', 0)))
+                    
+                    # Anti-Spam Zero Leak Architecture Logic
+                    if st.session_state["user_role"] == "Guest":
+                        st.info("🔒 Identity validation required to initialize privacy tunnel.")
+                    else:
+                        mask_id = f"mask_v4_{row.get('listing_id', idx)}"
+                        if mask_id not in st.session_state: st.session_state[mask_id] = True
+                        
+                        if st.session_state[mask_id]:
+                            if st.button("Unlock Contact Stream", key=f"btn_unl_{row.get('listing_id', idx)}"):
+                                st.session_state[mask_id] = False
+                                st.rerun()
+                        else:
+                            st.success(f"👤 Owner ID: {row.get('owner_name')}")
+                            # Prevent scrapers from parsing text lines via generation layout shims
+                            st.code(f"Mobile Sequence: +91 {row.get('owner_phone')}", language="text")
+                            
+                            # Construct direct WhatsApp message routing parameters
+                            msg_raw = f"Hello {row.get('owner_name')}, I am requesting a structural walkthrough regarding '{row.get('title')}' on Dwelza."
+                            msg_enc = urllib.parse.quote(msg_raw)
+                            st.markdown(f'<a href="https://wa.me/91{row.get("owner_phone")}?text={msg_enc}" target="_blank" class="wa-button">💬 Launch Direct WhatsApp Link</a>', unsafe_allow_html=True)
+                    
+                    st.write("---")
+                    if st.button("🚨 Report Fake / Sold Out", key=f"rep_{row.get('listing_id', idx)}"):
+                        df_listings.at[idx, 'reports_count'] += 1
+                        save_data(df_listings, "Listings")
+                        st.warning("Telemetry logged. System validation filters recalculating...")
+                        st.rerun()
+                        
+                st.markdown("</div>", unsafe_allow_html=True)
+        else:
+            st.info("Zero properties located within this matrix category path.")
 
-# --- MODULE 3: STRATEGIC ANALYTICS WORKSPACE ---
-elif menu == "📊 Strategic Analytics Platform":
-    st.subheader("Analytical Trends Matrix Dashboard")
-    if not df_historical.empty and 'locality' in df_historical.columns:
+# --- MODULE 2: TRANSPARENT REGIONAL PRICING DATA INDEX ---
+elif menu == "📊 Real-Time Pricing Index":
+    st.subheader("Transparent Localized Pricing Analytics Dashboard")
+    st.write("Dwelza strips out internal marketing paywalls. Use this tracking data to cross-check true builder market conditions.")
+    
+    if not df_historical.empty:
         c1, c2 = st.columns(2)
         with c1:
-            st.markdown("#### Volumetric Evaluation Analysis")
-            st.plotly_chart(px.bar(df_historical, x="locality", y="avg_price_per_sqft", color="avg_price_per_sqft", color_continuous_scale="Viridis"), use_container_width=True)
+            st.markdown("#### Real-Time Index Cost Per Sq.Ft")
+            st.plotly_chart(px.bar(df_historical, x="locality", y="avg_price_per_sqft", color="avg_price_per_sqft", color_continuous_scale="Turbo"), use_container_width=True)
         with c2:
-            st.markdown("#### Concentration Vector Proportions")
-            st.plotly_chart(px.pie(df_historical, names="locality", values="avg_price_per_sqft", hole=0.4), use_container_width=True)
+            st.markdown("#### Comparative Distribution Vectors")
+            st.plotly_chart(px.pie(df_historical, names="locality", values="avg_price_per_sqft", hole=0.3), use_container_width=True)
     else:
-        st.error("Missing configuration sheets inside database container assets.")
+        st.error("Historical ledger array empty.")
 
-# --- MODULE 4: DIRECT PROPERTY PUBLISHER PANEL ---
-elif menu == "🏗️ Direct Property Publisher Panel":
-    st.subheader("Secure Verification Submission Matrix")
+# --- MODULE 3: DIRECT OWNER MANAGEMENT HUB ---
+elif menu == "🏗️ Owner Verification Panel":
+    st.subheader("List Verified Real Estate Asset")
     
     if st.session_state["user_role"] != "Verified Builder / Owner":
-        st.error("🚨 Access Violations. You must change your context token validation parameters to 'Verified Builder / Owner' inside the security portal to execute data writes.")
+        st.error("🚨 Access Restricted. You must shift your profile authorization track to 'Verified Builder / Owner' inside the security portal to update the dynamic Excel files.")
     else:
-        with st.form("builder_secure_form"):
-            t = st.text_input("Property / Asset Name Title")
-            l = st.text_input("Locality String Value (e.g., Adyar, Chennai)")
-            p = st.number_input("Absolute Target Price (INR)", min_value=100000)
-            s = st.number_input("Total Plinth Footprint (Sq.Ft.)", min_value=100)
-            r = st.text_input("Official Government RERA Code Token")
-            o_n = st.text_input("Primary Contact Identity Name", value=st.session_state["username"])
-            o_p = st.text_input("Destination Contact Phone Sequence")
+        with st.form("secure_asset_publisher"):
+            t = st.text_input("Asset Heading Title (e.g. Luxury 2BHK Smart Penthouse)")
+            l = st.text_input("Locality Framework Destination (e.g. Indiranagar, Bangalore)")
+            p = st.number_input("Absolute Asking Price Target (INR)", min_value=10000)
+            s = st.number_input("Net Usable Layout Boundary (Sq.Ft.)", min_value=10)
+            r = st.text_input("Official RERA Ledger Index Sequence Code")
+            o_p = st.text_input("Direct Phone Target (Masked Automatically)")
             
-            sub = st.form_submit_button("Publish Verified Asset Record")
-            if sub and t and l and o_p:
+            submit = st.form_submit_button("Broadcast Asset Live")
+            
+            if submit and t and l and o_p:
                 n_id = int(df_listings['listing_id'].max() + 1 if not df_listings.empty else 1001)
-                exp_d = (datetime.now() + timedelta(days=30)).strftime("%Y-%m-%d")
-                new_data_row = {
+                created_dt = datetime.now().strftime("%Y-%m-%d")
+                exp_dt = (datetime.now() + timedelta(days=30)).strftime("%Y-%m-%d") # Absolute 30-Day TTL enforce loop
+                
+                new_row = {
                     "listing_id": n_id, "title": t, "locality": l, "price_inr": p, "size_sqft": s,
-                    "lat": 13.0067, "lon": 80.2578, "rera_number": r, "is_verified": bool(r),
+                    "lat": 12.9716, "lon": 77.5946, "rera_number": r, "is_verified": bool(r),
                     "veg_only": False, "bachelors_allowed": True, "near_metro": False,
-                    "owner_name": o_n, "owner_phone": o_p, "reports_count": 0, "expiry_date": exp_d, "status": "Active"
+                    "owner_name": st.session_state["username"], "owner_phone": o_p,
+                    "reports_count": 0, "created_date": created_dt, "expiry_date": exp_dt, "status": "Active"
                 }
-                save_data(pd.concat([df_listings, pd.DataFrame([new_data_row])], ignore_index=True), "Listings")
-                st.success("Transaction recorded. Database sequence synchronized efficiently!")
+                
+                updated_df = pd.concat([df_listings, pd.DataFrame([new_row])], ignore_index=True)
+                save_data(updated_df, "Listings")
+                st.success("Asset initialized successfully! Expiry deadline sequence tracked automatically for 30 days.")
                 st.rerun()
