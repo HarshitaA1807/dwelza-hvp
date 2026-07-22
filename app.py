@@ -17,12 +17,46 @@ st.set_page_config(
 # Target production dataset file path
 CSV_FILE = "hvp_dataset.csv"
 
+# --- INTUITIVE INITIALIZER ENGINE ---
+def seed_fallback_database():
+    """Generates standard baseline CSV asset data if no deployment file is discovered."""
+    default_listings = {
+        "title": [
+            "Premium 3 BHK Smart Apartment", 
+            "Cozy 1 BHK for Bachelors", 
+            "Modern Coimbatore Center Flat", 
+            "Luxury Coimbatore Suburban Villa"
+        ],
+        "locality": [
+            "Whitefield, Bangalore", 
+            "Andheri West, Mumbai", 
+            "Ramanathapuram, Coimbatore", 
+            "Saravanampatti, Coimbatore"
+        ],
+        "transaction_type": ["Buy", "Rent", "Rent", "Buy"],
+        "price_inr": [12000000, 35000, 22000, 8500000],
+        "size_sqft": [1400, 1100, 1250, 2400],
+        "image_url": [
+            "https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?w=500&auto=format&fit=crop", 
+            "https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?w=500&auto=format&fit=crop", 
+            "https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=500&auto=format&fit=crop", 
+            "https://images.unsplash.com/photo-1613490493576-7fde63acd811?w=500&auto=format&fit=crop"
+        ],
+        "rera_number": ["PRM/KA/RERA/1251", "", "", "TN/29/Building/0122/2026"],
+        "is_verified": [True, False, False, True],
+        "near_metro": [True, True, False, False],
+        "owner_name": ["Rajesh Kumar", "Amit Sharma", "Karthik Raja", "Suresh Kumar"],
+        "owner_phone": ["9999999999", "8888888888", "9444012345", "9846056789"],
+        "status": ["Active", "Active", "Active", "Active"]
+    }
+    pd.DataFrame(default_listings).to_csv(CSV_FILE, index=False, encoding="utf-8")
+
+# Force creation if it's not present
+if not os.path.exists(CSV_FILE):
+    seed_fallback_database()
+
 # --- AUTOMATED SCHEMA TRANSLATION ENGINE ---
 def auto_map_dataframe(df):
-    """
-    Dynamically maps raw Kaggle datasets using common real-estate aliases
-    to prevent application crashes and remove key missing column errors.
-    """
     mapping_dict = {
         'locality': ['locality', 'location', 'suburb', 'neighborhood', 'area', 'city', 'address', 'place'],
         'price_inr': ['price_inr', 'price', 'cost', 'amount', 'value', 'sale_price', 'rent_price'],
@@ -40,73 +74,42 @@ def auto_map_dataframe(df):
                 
     df = df.rename(columns=renamed_cols)
     
-    # Inject standard fallbacks for missing structural configuration elements
     if 'locality' not in df.columns: df['locality'] = 'Unknown Location Axis'
     if 'size_sqft' not in df.columns: df['size_sqft'] = 1000
     if 'price_inr' not in df.columns: df['price_inr'] = 5000000
     if 'transaction_type' not in df.columns: df['transaction_type'] = 'Buy'
     if 'status' not in df.columns: df['status'] = 'Active'
     
-    # Programmatic sanitization and typing cleanup
     df['locality'] = df['locality'].astype(str).str.strip()
     df['transaction_type'] = df['transaction_type'].astype(str).str.capitalize()
     df['status'] = df['status'].astype(str).str.capitalize()
     
-    # Convert numerical columns to valid integer states safely
     df['price_inr'] = pd.to_numeric(df['price_inr'], errors='coerce').fillna(5000000).astype(int)
     df['size_sqft'] = pd.to_numeric(df['size_sqft'], errors='coerce').fillna(1000).astype(int)
     
     return df
 
-# --- INTUITIVE INITIALIZER ENGINE (WITH UNICODE PATCH) ---
-def seed_fallback_database():
-    """Generates standard baseline CSV asset data if no deployment file is discovered."""
-    if not os.path.exists(CSV_FILE):
-        default_listings = {
-            "title": [
-                "Premium 3 BHK Smart Apartment", 
-                "Cozy 1 BHK for Bachelors", 
-                "Modern Coimbatore Center Flat", 
-                "Luxury Coimbatore Suburban Villa"
-            ],
-            "locality": [
-                "Whitefield, Bangalore", 
-                "Andheri West, Mumbai", 
-                "Ramanathapuram, Coimbatore", 
-                "Saravanampatti, Coimbatore"
-            ],
-            "transaction_type": ["Buy", "Rent", "Rent", "Buy"],
-            "price_inr": [12000000, 35000, 22000, 8500000],
-            "size_sqft": [1400, 1100, 1250, 2400],
-            "image_url": [
-                "https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?w=500&auto=format&fit=crop", 
-                "https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?w=500&auto=format&fit=crop", 
-                "https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=500&auto=format&fit=crop", 
-                "https://images.unsplash.com/photo-1613490493576-7fde63acd811?w=500&auto=format&fit=crop"
-            ],
-            "rera_number": ["PRM/KA/RERA/1251", "", "", "TN/29/Building/0122/2026"],
-            "is_verified": [True, False, False, True],
-            "near_metro": [True, True, False, False],
-            "owner_name": ["Rajesh Kumar", "Amit Sharma", "Karthik Raja", "Suresh Kumar"],
-            "owner_phone": ["9999999999", "8888888888", "9444012345", "9846056789"],
-            "status": ["Active", "Active", "Active", "Active"]
-        }
-        pd.DataFrame(default_listings).to_csv(CSV_FILE, index=False, encoding="utf-8")
-
-seed_fallback_database()
-
+# --- SAFELY LOAD DATASET AND BYPASS CORRUPTED LINES ---
 @st.cache_data
 def load_live_dataset():
-    """
-    Reads the active dataset safely. Explicitly targets 'latin-1' encoding 
-    profiles to bypass and completely eradicate UnicodeDecodeErrors.
-    """
     try:
-        df = pd.read_csv(CSV_FILE, encoding="latin-1")
+        # If the file exists but is corrupt/empty, wipe it and fix it automatically
+        if os.path.exists(CSV_FILE) and os.path.getsize(CSV_FILE) > 10:
+            df = pd.read_csv(CSV_FILE, encoding="latin-1", on_bad_lines="skip")
+        else:
+            if os.path.exists(CSV_FILE):
+                os.remove(CSV_FILE)
+            seed_fallback_database()
+            df = pd.read_csv(CSV_FILE, encoding="latin-1")
+            
         return auto_map_dataframe(df)
     except Exception as e:
-        st.error(f"Critical Ingestion Pipeline Error: {e}")
-        return pd.DataFrame()
+        # Fallback to prevent app crash if everything fails
+        seed_fallback_database()
+        try:
+            return auto_map_dataframe(pd.read_csv(CSV_FILE, encoding="latin-1"))
+        except:
+            return pd.DataFrame()
 
 df_listings = load_live_dataset()
 
@@ -118,7 +121,6 @@ if "username" not in st.session_state: st.session_state["username"] = ""
 def calculate_dynamic_valuation(size_sqft, locality, near_metro, txn_mode):
     locality_lower = str(locality).lower()
     
-    # Adaptive regional baseline evaluation parameters
     if "mumbai" in locality_lower: base_rate = 18000
     elif "bangalore" in locality_lower: base_rate = 9500
     elif "coimbatore" in locality_lower: base_rate = 5500
@@ -173,7 +175,6 @@ if menu_selection == "🔍 Unified Property Feed":
     st.write("Browse dynamic marketplace indexes for purchase transactions and residential long-term leases.")
     st.markdown("---")
     
-    # Global Omnipresent Navigation Filter Box
     with st.container(border=True):
         col_s1, col_s2, col_s3 = st.columns([2, 1, 1])
         with col_s1:
@@ -184,9 +185,10 @@ if menu_selection == "🔍 Unified Property Feed":
             verif_filter = st.toggle("Show Verified Only (RERA Approved)")
 
     if not df_listings.empty:
-        processed_df = df_listings[df_listings['status'] == 'Active'].copy()
+        processed_df = df_listings.copy()
+        if 'status' in processed_df.columns:
+            processed_df = processed_df[processed_df['status'] == 'Active']
         
-        # Apply strict data subset filters safely
         if market_filter == "For Sale / Buy Only":
             processed_df = processed_df[processed_df['transaction_type'].str.lower().str.startswith('b')]
         elif market_filter == "Rented Houses Only":
@@ -205,7 +207,6 @@ if menu_selection == "🔍 Unified Property Feed":
             for idx, row in processed_df.iterrows():
                 current_mode = "Rent" if str(row['transaction_type']).lower().startswith('r') else "Buy"
                 
-                # Fetch visual media anchors or fallback to clean real estate photography
                 img_url = row.get('image_url', "https://images.unsplash.com/photo-1564013799919-ab600027ffc6?w=500&auto=format&fit=crop")
                 if pd.isna(img_url) or not str(img_url).strip():
                     img_url = "https://images.unsplash.com/photo-1564013799919-ab600027ffc6?w=500&auto=format&fit=crop"
@@ -227,7 +228,6 @@ if menu_selection == "🔍 Unified Property Feed":
                         st.subheader(row.get('title', 'Premium Architectural Listing Asset'))
                         st.markdown(f"📍 **Location Mapping Axis:** {row['locality']}")
                         
-                        # Quantitative visual indicator rows
                         m_p1, m_p2, m_p3 = st.columns(3)
                         m_p1.metric("Listed Valuation Price", format_currency(int(row['price_inr']), current_mode))
                         m_p2.metric("Total Usable Area Layout", f"{int(row['size_sqft']):,} Sq.Ft.")
@@ -238,7 +238,6 @@ if menu_selection == "🔍 Unified Property Feed":
                         with st.expander("📊 Run Deep Statistical Valuation Spread Matrix"):
                             st.info(f"💡 **AI Predictive Fair Boundary Baseline:** {format_currency(c_low, current_mode)} to {format_currency(c_high, current_mode)}")
                             
-                            # Render comparative analytics layout chart gauges
                             fig = go.Figure(go.Indicator(
                                 mode = "gauge+number",
                                 value = int(row['price_inr']),
@@ -262,12 +261,12 @@ if menu_selection == "🔍 Unified Property Feed":
         else:
             st.error("No active property listing elements match your structural location or filter query configurations.")
     else:
-        st.warning("Database configuration ledger empty. Drop a valid raw CSV dataset in the root deployment container.")
+        st.warning("Database configuration ledger empty.")
 
 # --- PORTAL 2: UNIVERSAL PRICE PREDICTOR ENGINE ---
 elif menu_selection == "💡 Universal AI Price Predictor":
     st.title("💡 Cross-Location Real Estate Prediction Engine")
-    st.write("Type **any location across India** below. The predictive fallback matrix automatically calculates localized pricing metrics.")
+    st.write("Type any location across India below to run fair value forecasts.")
     st.markdown("---")
     
     with st.container(border=True):
